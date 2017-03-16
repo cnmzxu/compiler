@@ -3,14 +3,15 @@
     > Author: xumz
  ************************************************************************/
 #include <stdio.h>
-extern int yylex();
+#include "syntax.tab.h"
+extern int yyparse();
 extern int yyrestart(FILE* f);
 extern int yylineno;
 
 int main(int argc,char** argv){
-	printf("Parsering Start...\n");
+	printf("Parsing Start...\n");
 	if (argc < 2){
-		yylex();
+		yyparse();
 	}
 	else {
 		int i = 0;
@@ -22,11 +23,11 @@ int main(int argc,char** argv){
 			}
 			yyrestart(f);
 			yylineno = 1;
-			yylex();
+			yyparse();
 			fclose(f);
 		}
 	}
-	printf("Parsering End.\n");
+	printf("Parsing End.\n");
 	return 0;
 }
 

@@ -1,5 +1,6 @@
 %{
 #include <stdio.h>
+#include "syntax.tab.h"
 %}
 
 %option yylineno
@@ -42,87 +43,87 @@ RCOMMENT "*/"
 ID [_a-zA-Z][_a-zA-Z0-9]*
 %%
 {STRUCT} {
-    printf("%s\n", "STRUCT");
+    return STRUCT;
 }
 {RETURN} {
-    printf("%s\n", "RETURN");
+    return RETURN;
 }
 {IF} {
-    printf("%s\n", "IF");
-
+    return IF;
 }
 {ELSE} {
-    printf("%s\n", "ELSE");
+    return ELSE;
 }
 {WHILE} {
-    printf("%s\n", "WHILE");
+    return WHILE;
 }
 {SEMI} {
-    printf("%s\n", "SEMI");
+    return SEMI;
 }
 {COMMA} {
-    printf("%s\n", "COMMA");
+    return COMMA;
 }
 {ASSIGNOP} {
-    printf("%s\n", "ASSIGNOP");
+    return ASSIGNOP;
 }
 {TYPE} {
-    printf("%s: ", "TYPE");
-    printf("%s\n", yytext);
+    return TYPE;
 }
 {INT} {
-    printf("%s: ", "INT");
-    printf("%s\n", yytext);
+    return INT;
 }
 {FLOAT} {
-    printf("%s: ", "FLOAT");
-    printf("%s\n", yytext);
+    return FLOAT;
 }
 {RELOP} {
-    printf("%s\n", "RELOP");
+    return RELOP;
 }
 {PLUS} {
-    printf("%s", "PLUS");
+    return PLUS;
 }
 {MINUS} {
-    printf("%s\n", "MINUS");
+    return MINUS;
 }
 {STAR} {
-    printf("%s\n", "STAR");
+    return STAR;
 }
 {DIV} {
-    printf("%s\n", "DIV");
+    return DIV;
 }
 {AND} {
-    printf("%s\n", "AND");
+    return AND;
 }
 {OR} {
-    printf("%s\n", "OR");
+    return OR;
 }
 {DOT} {
-    printf("%s\n", "DOT");
+    return DOT;
 }
 {NOT} {
-    printf("%s\n", "NOT");
+    return NOT;
 }
 {LP} {
-    printf("%s\n", "LP");
+    return LP;
 }
 {RP} {
-    printf("%s\n", "RP");
+    return RP;
 }
 {LB} {
-    printf("%s\n", "LB");
+    return LB;
 }
 {RB} {
-    printf("%s\n", "RB");
+    return RB;
 }
 {LC} {
-    printf("%s\n", "LC");
+    return LC;
 }
 {RC} {
-    printf("%s\n", "RC");
+    return RC;
 }
+{ID} {
+    return ID;
+}
+
 {COMMENT1} {
     printf("%s\n", "COMMENT_TYPE1");
     char c = input();
@@ -131,23 +132,20 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 }
 {LCOMMENT} {
     printf("%s\n", "COMMENT_TYPE2");
-    char c  = input();
+    char c  = input(), d = input();
 	while (1){
-		if (c == '*'){
-			c = input();
-			if (c == '/')
+		if (c == '*' && d == '/'){
 				break;
 		}
-		c = input();
+		c = d;
+		d = input();
 	}
 }
 {BLANK} { }
-{ID} {
-    printf("%s: ", "ID");
-    printf("%s\n", yytext);
-}
+
 . {
-	printf("Error Type A at Line %d:%s\n", yylineno, yytext);
+	printf("Error Type A at Line %d: Mysterious characters '%s''\n", yylineno, yytext);
+	return ERROR;
 }
 %%
 
