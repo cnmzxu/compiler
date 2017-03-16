@@ -150,25 +150,4 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 	printf("Error Type A at Line %d:%s\n", yylineno, yytext);
 }
 %%
-int main(int argc,char** argv){
-	printf("Parsering Start...\n");
-	if (argc < 2){
-		yylex();
-	}
-	else {
-		int i = 0;
-		for (i = 1; i < argc; i++){
-			FILE *f = fopen(argv[i], "r");
-			if (!f){
-				perror(argv[i]);
-				return 1;
-			}
-			yyrestart(f);
-			yylineno = 1;
-			yylex();
-			fclose(f);
-		}
-	}
-	printf("Parsering End.\n");
-	return 0;
-}
+
