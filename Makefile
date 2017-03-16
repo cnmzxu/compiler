@@ -9,12 +9,12 @@ BISON = bison
 CFLAGS = -std=c99 -I ./include/
 
 #file sets
-CFLIES = $(shell find ./src/ -name "*.c")
+CFLIES = $(shell find ./code/ -name "*.c")
 OBJS = $(CFILES:.c=.o)
-LFILES = $(shell find ./src/ -name "*.l")
-YFILES = $(shell find ./src/ -name "*.y")
-LFC = $(shell find ./src/ -name "*.l" | sed s/[^/]*\\.l/lex.yy.c/)
-YFC = $(shell find ./src/ -name "*.y" | sed s/[^/]*\\.y/syntax.tab.c/)
+LFILES = $(shell find ./code/ -name "*.l")
+YFILES = $(shell find ./code/ -name "*.y")
+LFC = $(shell find ./code/ -name "*.l" | sed s/[^/]*\\.l/lex.yy.c/)
+YFC = $(shell find ./code/ -name "*.y" | sed s/[^/]*\\.y/syntax.tab.c/)
 LFO = $(LFC:.c=.o)
 YFO = $(YFC:.c=.o)
 
