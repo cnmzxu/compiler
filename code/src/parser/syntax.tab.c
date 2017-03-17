@@ -62,12 +62,12 @@
 
 
 /* Copy the first part of user declarations.  */
-#line 1 "syntax.y" /* yacc.c:339  */
+#line 1 "./code/src/parser/syntax.y" /* yacc.c:339  */
 
 #include "lex.yy.c"
 void yyerror(char *msg);
 
-#line 71 "syntax.tab.c" /* yacc.c:339  */
+#line 71 "./code/src/parser/syntax.tab.c" /* yacc.c:339  */
 
 # ifndef YY_NULLPTR
 #  if defined __cplusplus && 201103L <= __cplusplus
@@ -87,11 +87,11 @@ void yyerror(char *msg);
 
 /* In a future release of Bison, this section will be replaced
    by #include "syntax.tab.h".  */
-#ifndef YY_YY_SYNTAX_TAB_H_INCLUDED
-# define YY_YY_SYNTAX_TAB_H_INCLUDED
+#ifndef YY_YY_CODE_SRC_PARSER_SYNTAX_TAB_H_INCLUDED
+# define YY_YY_CODE_SRC_PARSER_SYNTAX_TAB_H_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
-# define YYDEBUG 1
+# define YYDEBUG 0
 #endif
 #if YYDEBUG
 extern int yydebug;
@@ -139,13 +139,13 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 5 "syntax.y" /* yacc.c:355  */
+#line 5 "./code/src/parser/syntax.y" /* yacc.c:355  */
 
 	int type_int;
 	float type_float;
 	double type_double;
 
-#line 149 "syntax.tab.c" /* yacc.c:355  */
+#line 149 "./code/src/parser/syntax.tab.c" /* yacc.c:355  */
 };
 
 typedef union YYSTYPE YYSTYPE;
@@ -158,11 +158,11 @@ extern YYSTYPE yylval;
 
 int yyparse (void);
 
-#endif /* !YY_YY_SYNTAX_TAB_H_INCLUDED  */
+#endif /* !YY_YY_CODE_SRC_PARSER_SYNTAX_TAB_H_INCLUDED  */
 
 /* Copy the second part of user declarations.  */
 
-#line 166 "syntax.tab.c" /* yacc.c:358  */
+#line 166 "./code/src/parser/syntax.tab.c" /* yacc.c:358  */
 
 #ifdef short
 # undef short
@@ -1335,7 +1335,7 @@ yyreduce:
   switch (yyn)
     {
       
-#line 1339 "syntax.tab.c" /* yacc.c:1646  */
+#line 1339 "./code/src/parser/syntax.tab.c" /* yacc.c:1646  */
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -1563,7 +1563,7 @@ yyreturn:
 #endif
   return yyresult;
 }
-#line 118 "syntax.y" /* yacc.c:1906  */
+#line 118 "./code/src/parser/syntax.y" /* yacc.c:1906  */
 
 void yyerror(char *msg){
 	fprintf(stderr, "line %d: ", yylineno);
