@@ -15,13 +15,15 @@ COMMA ","
 ASSIGNOP "="
 TYPE "int"|"float"
 BLANK [\n\t ]+
-INT_DEC [+-]?(([1-9][0-9]*)|0)
-INT_HEX [+-]?0x([0-9]|[a-f]|[A-F])+
-INT_OCT [+-]?0[0-7]+
-INT {INT_DEC}|{INT_HEX}|{INT_OCT}
-FLOAT_NOR [+-]?[0-9]+\.[0-9]+
-FLOAT_EXP [+-]?(([0-9]+\.[0-9]*)|([0-9]*\.[0-9]+))(E|e)[+-]?[0-9]+
-FLOAT {FLOAT_NOR}|{FLOAT_EXP}
+INT_DEC ([1-9][0-9]*)|0
+INT_HEX 0[xX][0-9a-fA-F]+
+INT_OCT 0[0-7]+
+INT [+-]?({INT_DEC}|{INT_HEX}|{INT_OCT})
+ERROR_HEX 0[xX][0-9a-zA-Z]+
+ERROR_OCT 0[0-9]+
+FLOAT_NOR [0-9]+\.[0-9]+
+FLOAT_EXP (([0-9]+\.[0-9]*)|([0-9]*\.[0-9]+))(E|e)[+-]?[0-9]+
+FLOAT [+-]?({FLOAT_NOR}|{FLOAT_EXP})
 RELOP >|<|>=|<=|==|!=
 PLUS "+"
 MINUS "-"
@@ -125,13 +127,13 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 }
 
 {COMMENT1} {
-    printf("%s\n", "COMMENT_TYPE1");
+    //printf("%s\n", "COMMENT_TYPE1");
     char c = input();
 	while (c != '\n')
 		c = input();
 }
 {LCOMMENT} {
-    printf("%s\n", "COMMENT_TYPE2");
+    //printf("%s\n", "COMMENT_TYPE2");
     char c  = input(), d = input();
 	while (1){
 		if (c == '*' && d == '/'){
@@ -143,8 +145,16 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 }
 {BLANK} { }
 
+{ERROR_HEX} {
+	printf("Error Type A at Line %d: Illegal hexadecimal number '%s'.\n", yylineno, yytext);
+	return ERROR;
+}
+{ERROR_OCT} {
+	printf("Error Type A at Line %d: Illegal octal number '%s'.\n", yylineno, yytext);
+	return ERROR;
+}
 . {
-	printf("Error Type A at Line %d: Mysterious characters '%s''\n", yylineno, yytext);
+	printf("Error Type A at Line %d: Mysterious characters '%s'.\n", yylineno, yytext);
 	return ERROR;
 }
 %%

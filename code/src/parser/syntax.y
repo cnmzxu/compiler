@@ -69,6 +69,7 @@ ParamDec : Specifier VarDec
 		 ;
 /*Statements*/
 CompSt : LC DefList StmtList RC
+	   | LC DefList error RC { }
 	   ;
 StmtList : Stmt StmtList
 		 | /* empty */
@@ -79,12 +80,15 @@ Stmt : Exp SEMI
 	 | IF LP Exp RP Stmt %prec LOWER_THAN_ELSE
 	 | IF LP Exp RP Stmt ELSE Stmt
 	 | WHILE LP Exp RP Stmt
+	 | error SEMI {}
+	 | RETURN error SEMI {}
 	 ;
 /* Local Definitions */
 DefList : Def DefList
 		| /* empty */
 		;
 Def : Specifier DecList SEMI
+	| Specifier error SEMI {}
 	;
 DecList : Dec
 		| Dec COMMA DecList
@@ -111,6 +115,8 @@ Exp : Exp ASSIGNOP Exp
 	| ID 
 	| INT 
 	| FLOAT
+	| ID LP error RP { }
+	| LP error RP { }
 	;
 Args : Exp COMMA Args
 	 | Exp

@@ -23,6 +23,7 @@ int main(int argc,char** argv){
 			}
 			yyrestart(f);
 			yylineno = 1;
+		//	yydebug = 1;
 			yyparse();
 			fclose(f);
 		}
