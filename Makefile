@@ -39,9 +39,9 @@ test:
 	./parser test.cmm
 
 clean:
-	rm -f parser lex.yy.c syntax.tab.c syntax.tab.h syntax.output
+	rm -f parser 
 	rm -f $(OBJS) $(OBJS:.o=.d)
-	rm -f $(LFC) $(YFC:.c=.h)
+	rm -f $(LFC) $(YFC) $(YFC:.c=.h) $(YFILE:.y=.output)
 	rm -f *~
 
 git: clean
