@@ -6,7 +6,7 @@ CC = gcc
 FLEX = flex
 BISON = bison
 
-CFLAGS = -std=c99 -I ./include/
+CFLAGS = -I ./code/include/
 
 #file sets
 CFILES = $(shell find ./code/ -name "*.c")
@@ -20,10 +20,10 @@ YFO = $(YFC:.c=.o)
 COBJS = $(filter-out $(LFO), $(OBJS))
 #targets
 parser: syntax $(COBJS)
-	$(CC) -o parser $(COBJS) -lfl -ly
+	$(CC) -o parser $(COBJS) -lfl -ly $(CFLAGS)
 
 syntax: lexical syntax-c
-	$(CC) -c $(YFC) -o $(YFO)
+	$(CC) -c $(YFC) -o $(YFO) $(CFLAGS)
 
 lexical: $(LFILE)
 	$(FLEX) -o $(LFC) $(LFILE)
