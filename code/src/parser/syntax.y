@@ -6,42 +6,61 @@ void yyerror(char *msg);
 
 #define YYSTYPE_IS_DECLARED 1
 typedef Node* YYSTYPE;
-Node head = {"", "", NULL, NULL, 0};
+Node space_for_head;
+YYSTYPE head = &space_for_head;
+int parser_error_happen = 0;
 
 #include "lex.yy.c"
 
-#define MY_SYNSETUP(str) \
+#define EMPTY_SETUP \
+	Node *node = (Node *)malloc(sizeof(Node));\
+	(yyval) = node; \
+	(yyval)->child = (Node *)NULL; \
+	(yyval)->sibling = (Node *)NULL; \
+	strcpy((yyval)->type, "empty"); \
+	(yyval)->lineno = (yyloc).first_line; \
+	(yyval)->is_token = 0;
+
+#define ERROR_SETUP \
+	Node *node = (Node *)malloc(sizeof(Node));\
+	(yyval) = node; \
+	(yyval)->child = (Node *)NULL; \
+	strcpy((yyval)->type, "error");\
+	(yyval)->lineno = (yyloc).first_line;
+
+#define MY_SYNSETUP(str, l) \
 	Node *node = (Node *)malloc(sizeof(Node)); \
-	$$ = node; \
-	$$->child = $1; \
-	strcpy($$->type, str);\
-	$$->lineno = @$.first_line;
+	(yyval) = node; \
+	(yyval)->child = (yyvsp[-(l-1)]); \
+	strcpy((yyval)->type, str);\
+	(yyval)->lineno = (yyloc).first_line;\
+	(yyval)->is_token = 0;
 
 #define SIBLING
 
 #define SIBLING2 \
 	SIBLING\
-	$1->sibling = $2;
+	(yyvsp[-1])->sibling = (yyvsp[0]);
 
 #define SIBLING3 \
 	SIBLING2 \
-	$2->sibling = $3;
+	(yyvsp[-2])->sibling = (yyvsp[-1]);
 
 #define SIBLING4 \
 	SIBLING3 \
-	$3->sibling = $4;
+	(yyvsp[-3])->sibling = (yyvsp[-2]);
 
 #define SIBLING5 \
 	SIBLING4 \
-	$4->sibling = $5;
+	(yyvsp[-4])->sibling = (yyvsp[-3]);
 
 #define SIBLING6 \
 	SIBLING5 \
-	$5->sibling = $6;
+	(yyvsp[-5])->sibling = (yyvsp[-4]);
 
 #define SIBLING7 \
 	SIBLING6\
-	$6->sibling = $7;
+	(yyvsp[-6])->sibling = (yyvsp[-5]);
 
 #define MY_SYNSETUP_END
 %}
@@ -66,395 +85,331 @@ Node head = {"", "", NULL, NULL, 0};
 
 %nonassoc LOWER_THAN_ELSE
 %nonassoc ELSE
+
+%nonassoc ERROR_TYPE
+%nonassoc RIGHT_TYPE
 %%
 Program : ExtDefList {
-   $$ = &head;
-   strcpy($$->type, "Program");
-   $$->child = $1;
-   $$->lineno = @$.first_line;
-  }
-  ;
+		$$ = head;
+		if ($$){
+			strcpy($$->type, "Program");
+			$$->child = $1;
+			$$->lineno = @$.first_line;
+		}
+	}
+		;
 ExtDefList : ExtDef ExtDefList {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "ExtDefList"); 
-   $$->lineno = @$.first_line;
-   $1->sibling = $2; 
-  }
-     | {
-   $$ = NULL;
-  }
-     ;
+		MY_SYNSETUP("ExtDefList", 2)
+		SIBLING2
+		MY_SYNSETUP_END
+	}
+		   | /* empty */ {
+		EMPTY_SETUP
+	}
+		   ;
 ExtDef : Specifier ExtDecList SEMI {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "ExtDef"); 
-   $$->lineno = @$.first_line;
-   $1->sibling = $2; 
-   $2->sibling = $3;
-  
-  }
-    | Specifier SEMI {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "ExtDef"); 
-   $$->lineno = @$.first_line;
-   $1->sibling = $2;
-  
-  }
-    | Specifier FunDec CompSt {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "ExtDef"); 
-   $$->lineno = @$.first_line;
-   $1->sibling = $2; 
-   $2->sibling = $3; 
-  }
-    ;
+		MY_SYNSETUP("ExtDef", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	} 
+	   | Specifier SEMI {
+		MY_SYNSETUP("ExtDef", 2)
+		SIBLING2
+		MY_SYNSETUP_END
+	}
+	   | Specifier FunDec CompSt {
+		MY_SYNSETUP("ExtDef", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	   ;
 ExtDecList : VarDec {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "ExtDecList"); 
-   $$->lineno = @$.first_line;
-  
-  
-  }
-     | VarDec COMMA ExtDecList {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node;
-   $$->child = $1;
-   strcpy($$->type, "ExtDecList");
-   $$->lineno = @$.first_line;
-   $1->sibling = $2;
-   $2->sibling = $3;
-  }
-     ;
-
+		MY_SYNSETUP("ExtDecList", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	}
+		   | VarDec COMMA ExtDecList {
+		MY_SYNSETUP("ExtDecList", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+		   ;
+/* Specifiers */
 Specifier : TYPE {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "Specifier"); 
-   $$->lineno = @$.first_line;
-  
-  
-  }
-    | StructSpecifier {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "Specifier"); 
-   $$->lineno = @$.first_line;
-  }
-    ;
+		MY_SYNSETUP("Specifier", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	}
+		  | StructSpecifier {
+		MY_SYNSETUP("Specifier", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	}
+		  ;
 StructSpecifier : STRUCT OptTag LC DefList RC {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "StructSpecifier"); 
-   $$->lineno = @$.first_line;
-   $1->sibling = $2;
-   $2->sibling = $3;
-   $3->sibling = $4;
-   $4->sibling = $5;
-  
-  }
-    | STRUCT Tag {
-   Node *node = (Node *)malloc(sizeof(Node));
-   $$ = node;
-   $$->child = $1;
-   strcpy($$->type, "StructSpecifier");
-   $$->lineno = @$.first_line;
-   $1->sibling = $2;
-  
-  }
-    ;
+		MY_SYNSETUP("StructSpecifier", 5)
+		SIBLING5
+		MY_SYNSETUP_END
+	}
+				| STRUCT Tag {
+		MY_SYNSETUP("StructSpecifier", 2)
+		SIBLING2
+		MY_SYNSETUP_END
+	} 
+				;
 OptTag : ID {
-	   Node *node = (Node *)malloc(sizeof(Node));
-	   $$ = node;
-	   $$->child = $1;
-	  strcpy($$->type, "OptTag");
-	  $$->lineno = @$.first_line; 
+		MY_SYNSETUP("OptTag", 1)
+		SIBLING
+		MY_SYNSETUP_END
 	}
-    | /* empty */{
-		$$ = NULL;
+	   | /* empty */ {
+		EMPTY_SETUP
 	}
-    ;
+	   ;
 Tag : ID {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "Tag"); 
-   $$->lineno = @$.first_line;
-  }
- ;
-
+		MY_SYNSETUP("Tag", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	}
+	;
+/* Declarators */
 VarDec : ID {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "VarDec"); 
-   $$->lineno = @$.first_line;
-    }
-    | VarDec LB INT RB {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; $$->child = $1; strcpy($$->type, "");
-   $$->lineno = @$.first_line;
-   $1->sibling = $2; 
-   $2->sibling = $3; 
-   $3->sibling = $4;
-    }
-    ;
+		MY_SYNSETUP("VarDec", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	}
+	   | VarDec LB INT RB {
+		MY_SYNSETUP("VarDec", 4)
+		SIBLING4
+		MY_SYNSETUP_END
+	}
+	   ;
 FunDec : ID LP VarList RP {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "FunDec");
-   $$->lineno = @$.first_line;
-   $1->sibling = $2; 
-   $2->sibling = $3; 
-   $3->sibling = $4;
-   }
-    | ID LP RP{
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "FunDec"); 
-   $$->lineno = @$.first_line;
-   $1->sibling = $2; 
-   $2->sibling = $3;
-  }
-    ;
+		MY_SYNSETUP("FunDec", 4)
+		SIBLING4
+		MY_SYNSETUP_END
+	}
+	   | ID LP RP{
+		MY_SYNSETUP("FunDec", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	   ;
 VarList : ParamDec COMMA VarList {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node; 
-   $$->child = $1; 
-   strcpy($$->type, "VarList"); 
-   $$->lineno = @$.first_line;
-   $1->sibling = $2; 
-   $2->sibling = $3;
-  
-  }
-  | ParamDec {
-   Node *node = (Node *)malloc(sizeof(Node)); 
-   $$ = node;
-   $$->child = $1; 
-   strcpy($$->type, "VarList");
-   $$->lineno = @$.first_line;
-  
-  
-  }
-  ;
+		MY_SYNSETUP("VarList", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+		| ParamDec {
+		MY_SYNSETUP("VarList", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	}
+		;
 ParamDec : Specifier VarDec {
-   Node *node = (Node *)malloc(sizeof(Node));
-   $$ = node;
-   $$->child = $1;
-   strcpy($$->type, "ParamDec"); 
-   $$->lineno = @$.first_line;
-   $1->sibling = $2;
-  
-  }
-   ;
-
+		MY_SYNSETUP("ParamDec", 2)
+		SIBLING2
+		MY_SYNSETUP_END
+	}
+		 ;
+/*Statements*/
 CompSt : LC DefList StmtList RC {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "CompSt"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3; $3->sibling = $4;
-  
-  }
-    | LC DefList error RC { }
-    ;
+		MY_SYNSETUP("CompSt", 4)
+		SIBLING4
+		MY_SYNSETUP_END
+	}
+	   | error RC {
+		ERROR_SETUP
+	}
+	   ;
 StmtList : Stmt StmtList {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "StmtList"); $$->lineno = @$.first_line;
-   $1->sibling = $2;
-  
-  }
-   | {
-   $$ = NULL;
-  }
-   ;
+		MY_SYNSETUP("StmtList", 2)
+		SIBLING2
+		MY_SYNSETUP_END
+	}
+		 | /* empty */{
+		EMPTY_SETUP
+	}
+		 ;
 Stmt : Exp SEMI {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Stmt"); $$->lineno = @$.first_line;
-   $1->sibling = $2;
-  
-  }
-  | CompSt {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Stmt"); $$->lineno = @$.first_line;
-  
-  
-  }
-  | RETURN Exp SEMI {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Stmt"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
-  | IF LP Exp RP Stmt %prec LOWER_THAN_ELSE {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Stmt"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3; $3->sibling = $4; $4->sibling = $5;
-  
-  }
-  | IF LP Exp RP Stmt ELSE Stmt {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Stmt"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3; $3->sibling = $4; $4->sibling = $5; $5->sibling = $6; $6->sibling = $7;
-  
-  }
-  | WHILE LP Exp RP Stmt {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Stmt"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3; $3->sibling = $4; $4->sibling = $5;
-  
-  }
-  | error SEMI { }
-  | RETURN error SEMI { }
-  ;
-
+		MY_SYNSETUP("Stmt", 2)
+		SIBLING2
+		MY_SYNSETUP_END
+	}
+	 | CompSt {
+		MY_SYNSETUP("Stmt", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	}
+	 | RETURN Exp SEMI {
+		MY_SYNSETUP("Stmt", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	 | IF LP Exp RP Stmt %prec LOWER_THAN_ELSE {
+		MY_SYNSETUP("Stmt", 5)
+		SIBLING5
+		MY_SYNSETUP_END
+	}
+	 | IF LP Exp RP Stmt ELSE Stmt {
+		MY_SYNSETUP("Stmt", 7)
+		SIBLING7
+		MY_SYNSETUP_END
+	}
+	 | WHILE LP Exp RP Stmt {
+		MY_SYNSETUP("Stmt", 5)
+		SIBLING5
+		MY_SYNSETUP_END
+	}
+	 | error SEMI {
+		ERROR_SETUP
+	}
+	 ;
+/* Local Definitions */
 DefList : Def DefList {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "DefList"); $$->lineno = @$.first_line;
-   $1->sibling = $2;
-  
-  }
-  |
-  ;
+		MY_SYNSETUP("DefList", 2)
+		SIBLING2
+		MY_SYNSETUP_END
+	}
+		| /* empty */{
+		EMPTY_SETUP
+	}
+		;
 Def : Specifier DecList SEMI {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Def"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | Specifier error SEMI { }
- ;
+		MY_SYNSETUP("Def", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	;
 DecList : Dec {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "DecList"); $$->lineno = @$.first_line;
-  
-  
-  }
-  | Dec COMMA DecList {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "DecList"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
-  ;
+		MY_SYNSETUP("DecList", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	}
+		| Dec COMMA DecList {
+		MY_SYNSETUP("DecList", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+		;
 Dec : VarDec {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Dec"); $$->lineno = @$.first_line;
-  
-  
-  }
- | VarDec ASSIGNOP Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Dec"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- ;
-
+		MY_SYNSETUP("Dec", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	}
+	| VarDec ASSIGNOP Exp {
+		MY_SYNSETUP("Dec", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	;
+/* Expressions */
 Exp : Exp ASSIGNOP Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | Exp AND Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | Exp OR Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | Exp RELOP Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | Exp PLUS Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | Exp MINUS Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | Exp STAR Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | Exp DIV Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | LP Exp RP {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | MINUS Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2;
-  
-   }
- | NOT Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2;
-  
-  }
- | ID LP Args RP {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3; $3->sibling = $4;
-  
-  }
- | ID LP RP {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | Exp LB Exp RB {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3; $3->sibling = $4;
-  
-  }
- | Exp DOT ID {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
- | ID {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-  
-  
-  }
- | INT {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-  
-  
-  }
- | FLOAT {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Exp"); $$->lineno = @$.first_line;
-  
-  
-  }
- | ID LP error RP { }
- | LP error RP { }
- ;
+		MY_SYNSETUP("Exp", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	| Exp AND Exp {
+		MY_SYNSETUP("Exp", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	| Exp OR Exp {
+		MY_SYNSETUP("Exp", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	| Exp RELOP Exp {
+		MY_SYNSETUP("Exp", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	| Exp PLUS Exp {
+		MY_SYNSETUP("Exp", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	} 
+	| Exp MINUS Exp {
+		MY_SYNSETUP("Exp", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	| Exp STAR Exp {
+		MY_SYNSETUP("Exp", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	} 
+	| Exp DIV Exp {
+		MY_SYNSETUP("Exp", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	} 
+	| LP Exp RP {
+		MY_SYNSETUP("Exp", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	| MINUS Exp {
+		MY_SYNSETUP("Exp", 2)
+		SIBLING2
+		MY_SYNSETUP_END
+ 	} 
+	| NOT Exp {
+		MY_SYNSETUP("Exp", 2)
+		SIBLING2
+		MY_SYNSETUP_END
+	} 
+	| ID LP Args RP {
+		MY_SYNSETUP("Exp", 4)
+		SIBLING4
+		MY_SYNSETUP_END
+	} 
+	| ID LP RP {
+		MY_SYNSETUP("Exp", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	| Exp LB Exp RB {
+		MY_SYNSETUP("Exp", 4)
+		SIBLING4
+		MY_SYNSETUP_END
+	} 
+	| Exp DOT ID {
+		MY_SYNSETUP("Exp", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	} 
+	| ID {
+		MY_SYNSETUP("Exp", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	} 
+	| INT { 
+		MY_SYNSETUP("Exp", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	} 
+	| FLOAT {
+		MY_SYNSETUP("Exp", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	}
+	;
 Args : Exp COMMA Args {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Args"); $$->lineno = @$.first_line;
-   $1->sibling = $2; $2->sibling = $3;
-  
-  }
-  | Exp {
-   Node *node = (Node *)malloc(sizeof(Node)); $$ = node; $$->child = $1; strcpy($$->type, "Args"); $$->lineno = @$.first_line;
-  
-  
-  }
-  ;
+		MY_SYNSETUP("Args", 3)
+		SIBLING3
+		MY_SYNSETUP_END
+	}
+	 | Exp {
+		MY_SYNSETUP("Args", 1)
+		SIBLING
+		MY_SYNSETUP_END
+	}
+	 ;
 %%
 void yyerror(char *msg){
-	fprintf(stderr, "Error Typr B at Line %d: ", yylineno);
-	fprintf(stderr, "error: %s\n", msg);
+	parser_error_happen = 1;
+	fprintf(stderr, "Error Type B at Line %d: ", yylineno);
+	fprintf(stderr, "%s\n", msg);
 	return;
 }

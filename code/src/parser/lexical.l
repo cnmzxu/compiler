@@ -11,11 +11,13 @@ int yycolumn = 0;
 	yycolumn += yyleng - 1;
 
 #define MY_LEXSETUP \
-	YYSTYPE lexval = (YYSTYPE)malloc(sizeof(Node)); \
+	Node *lexval = (Node *)malloc(sizeof(Node)); \
 	yylval = lexval;\
-	yylval->lineno = yylineno;
+	yylval->lineno = yylineno;\
+	yylval->is_token = 1;
 
 #define MY_LEXSETUP_END
+int lex_error_happen;
 %}
 %option yylineno
 
@@ -246,14 +248,17 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 "\n" { yycolumn = 1; }
 
 {ERROR_HEX} {
+	lex_error_happen = 1;
 	printf("Error Type A at Line %d: Illegal hexadecimal number '%s'.\n", yylineno, yytext);
 	return INT;
 }
 {ERROR_OCT} {
+	lex_error_happen = 1;
 	printf("Error Type A at Line %d: Illegal octal number '%s'.\n", yylineno, yytext);
 	return INT;
 }
 . {
+	lex_error_happen = 1;
 	printf("Error Type A at Line %d: Mysterious characters '%s'.\n", yylineno, yytext);
 	return ERROR;
 }

@@ -10,16 +10,19 @@
 extern int yyparse();
 extern int yyrestart(FILE* f);
 extern int yylineno;
-extern Node head;
+extern int parser_error_happen, lex_error_happen;
+extern Node* head;
 void print(Node *treenode, int indent){
-	if(treenode == NULL)
+	if(treenode == NULL || (strcmp(treenode->type, "empty") == 0))
 		return;
 	int i = 0, j = 0;
 	for(i = 0; i < indent; i++)
 		printf("  ");
 	printf("%s", treenode->type);
-	if (strlen(treenode->value) > 0)
-		printf(": %s", treenode->value);
+	if (treenode->is_token == 1){
+		if (strlen(treenode->value) > 0)
+			printf(": %s", treenode->value);
+	}
 	else
 		printf(" (%d)", treenode->lineno);
 	printf("\n");
@@ -47,13 +50,14 @@ int main(int argc,char** argv){
 			}
 			yyrestart(f);
 			yylineno = 1;
-		//	yydebug = 1;
+			//yydebug = 1;
 			yyparse();
 			fclose(f);
 		}
 	}
 	printf("Parsing End.\n");
-	print(&head, 0);
+	if (!parser_error_happen && !lex_error_happen)
+		print(head, 0);
 
 	return 0;
 }

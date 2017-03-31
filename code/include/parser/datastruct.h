@@ -11,6 +11,7 @@ typedef struct node {
 	struct node *child; 
 	struct node *sibling;
 	int lineno;
+	int is_token;
 } Node;
 
 #endif
