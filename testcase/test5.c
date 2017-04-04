@@ -1,4 +1,5 @@
-int main(){
+int main()
+{
 	int i = 0123;
-	int j = 0x3F3f;
+	int j = 0x3F;
 }

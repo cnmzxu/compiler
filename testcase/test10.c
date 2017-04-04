@@ -1,6 +1,7 @@
-int main(){
+int main()
+{
   /*
-   * comment
+    comment
   /*
    nested comment
    */

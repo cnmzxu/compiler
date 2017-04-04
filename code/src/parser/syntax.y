@@ -19,7 +19,7 @@ int parser_error_happen = 0;
 	(yyval)->sibling = (Node *)NULL; \
 	strcpy((yyval)->type, "empty"); \
 	(yyval)->lineno = (yyloc).first_line; \
-	(yyval)->is_token = 0;
+	(yyval)->token_type = 0;
 
 #define ERROR_SETUP \
 	Node *node = (Node *)malloc(sizeof(Node));\
@@ -34,7 +34,7 @@ int parser_error_happen = 0;
 	(yyval)->child = (yyvsp[-(l-1)]); \
 	strcpy((yyval)->type, str);\
 	(yyval)->lineno = (yyloc).first_line;\
-	(yyval)->is_token = 0;
+	(yyval)->token_type = 0;
 
 #define SIBLING
 
@@ -95,6 +95,7 @@ Program : ExtDefList {
 			strcpy($$->type, "Program");
 			$$->child = $1;
 			$$->lineno = @$.first_line;
+			$$->token_type = 0;
 		}
 	}
 		;
@@ -409,7 +410,6 @@ Args : Exp COMMA Args {
 %%
 void yyerror(char *msg){
 	parser_error_happen = 1;
-	fprintf(stderr, "Error Type B at Line %d: ", yylineno);
-	fprintf(stderr, "%s\n", msg);
+	fprintf(stderr, "Error type B at Line %d: %s.\n", yylineno, msg);
 	return;
 }

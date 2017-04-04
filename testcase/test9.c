@@ -1,4 +1,5 @@
-int main(){
+int main()
+{
 	//line comment
 	/*
 	block comment

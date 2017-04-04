@@ -20,8 +20,8 @@ typedef struct node {
 	 * 3: hexadecimal int
 	 * 4: octal int
 	 * 5: float
-	 * 6: ID
-	 * 7: TYPE
+	 *
+	 *
 	 * */
 } Node;
 

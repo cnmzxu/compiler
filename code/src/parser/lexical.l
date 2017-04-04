@@ -10,11 +10,13 @@ int yycolumn = 0;
 	yylloc.last_column = yycolumn + yyleng - 1; \
 	yycolumn += yyleng - 1;
 
-#define MY_LEXSETUP \
+#define MY_LEXSETUP(name) \
 	Node *lexval = (Node *)malloc(sizeof(Node)); \
 	yylval = lexval;\
 	yylval->lineno = yylineno;\
-	yylval->is_token = 1;
+	yylval->token_type = 1;\
+	strcpy(yylval->type, name)
+	
 
 #define MY_LEXSETUP_END
 int lex_error_happen;
@@ -32,15 +34,15 @@ COMMA ","
 ASSIGNOP "="
 TYPE "int"|"float"
 BLANK [\n\t\r\f\v ]+
-INT_DEC ([1-9][0-9]*)|0
-INT_HEX 0[xX][0-9a-fA-F]+
-INT_OCT 0[0-7]+
-INT [+-]?({INT_DEC}|{INT_HEX}|{INT_OCT})
+INT_DEC [+-]?([1-9][0-9]*)|0
+INT_HEX [+-]?0[xX][0-9a-fA-F]+
+INT_OCT [+-]?0[0-7]+
 ERROR_HEX 0[xX][0-9a-zA-Z]+
 ERROR_OCT 0[0-9]+
 FLOAT_NOR [0-9]+\.[0-9]+
 FLOAT_EXP (([0-9]+\.[0-9]*)|([0-9]*\.[0-9]+))(E|e)[+-]?[0-9]+
 FLOAT [+-]?({FLOAT_NOR}|{FLOAT_EXP})
+ERROR_FLOAT_EXP [0-9]*\.[0-9]*(E|e)[+-]?[0-9]*
 RELOP >|<|>=|<=|==|!=
 PLUS "+"
 MINUS "-"
@@ -61,180 +63,140 @@ COMMENT_TYPE2 "/*"
 ID [_a-zA-Z][_a-zA-Z0-9]*
 %%
 {STRUCT} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "STRUCT");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("STRUCT");
     return STRUCT;
 }
 {RETURN} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "RETURN");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("RETURN");
     return RETURN;
 }
 {IF} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "IF");
-	MY_LEXSETUP_END
-    return IF;
+	MY_LEXSETUP("IF"); 
+	return IF;
 }
 {ELSE} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "ELSE");
-	MY_LEXSETUP_END
-    return ELSE;
+	MY_LEXSETUP("ELSE");
+	return ELSE;
 }
 {WHILE} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "WHILE");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("WHILE");
     return WHILE;
 }
 {SEMI} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "SEMI");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("SEMI");
     return SEMI;
 }
 {COMMA} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "COMMA");
-	MY_LEXSETUP_END
-    return COMMA;
+	MY_LEXSETUP("COMMA");
+	return COMMA;
 }
 {ASSIGNOP} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "ASSIGNOP");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("ASSIGNOP");
     return ASSIGNOP;
 }
 {TYPE} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "TYPE");
+	MY_LEXSETUP("TYPE");
 	strcpy(yylval->value, yytext);
-	MY_LEXSETUP_END
+	yylval->token_type = 7;
     return TYPE;
 }
-{INT} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "INT");
+{INT_DEC} {
+	MY_LEXSETUP("INT");
 	strcpy(yylval->value, yytext);
-	MY_LEXSETUP_END
+	yylval->token_type = 2;
+    return INT;
+}
+{INT_HEX} {
+	MY_LEXSETUP("INT");
+	strcpy(yylval->value, yytext);
+	yylval->token_type = 3;
+    return INT;
+}
+{INT_OCT} {
+	MY_LEXSETUP("INT");
+	strcpy(yylval->value, yytext);
+	yylval->token_type = 4;
     return INT;
 }
 {FLOAT} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "FLOAT");
+	MY_LEXSETUP("FLOAT");
 	strcpy(yylval->value, yytext);
-	MY_LEXSETUP_END
+	yylval->token_type = 5;
 	return FLOAT;
 }
 {RELOP} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "RELOP");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("RELOP");
     return RELOP;
 }
 {PLUS} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "PLUS");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("PLUS");
     return PLUS;
 }
 {MINUS} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "MINUS");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("MINUS");
     return MINUS;
 }
 {STAR} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "STAR");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("STAR");
     return STAR;
 }
 {DIV} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "DIV");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("DIV");
     return DIV;
 }
 {AND} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "AND");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("AND");
     return AND;
 }
 {OR} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "OR");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("OR");
     return OR;
 }
 {DOT} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "DOT");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("DOT");
     return DOT;
 }
 {NOT} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "NOT");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("NOT");
     return NOT;
 }
 {LP} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "LP");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("LP");
     return LP;
 }
 {RP} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "RP");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("RP");
     return RP;
 }
 {LB} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "LB");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("LB");
     return LB;
 }
 {RB} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "RB");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("RB");
     return RB;
 }
 {LC} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "LC");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("LC");
     return LC;
 }
 {RC} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "RC");
-	MY_LEXSETUP_END
+	MY_LEXSETUP("RC");
     return RC;
 }
 {ID} {
-	MY_LEXSETUP
-	strcpy(yylval->type, "ID");
+	MY_LEXSETUP("ID");
 	strcpy(yylval->value, yytext);
-	MY_LEXSETUP_END
+	yylval->token_type = 6;
     return ID;
 }
 
 {COMMENT_TYPE1} {
-    printf("%s\n", "COMMENT_TYPE1");
     char c = input();
 	while (c != '\n')
 		c = input();
 }
 {COMMENT_TYPE2} {
-    printf("%s\n", "COMMENT_TYPE2");
     char c  = input(), d = input();
 	while (1){
 		if (c == '*' && d == '/'){
@@ -257,10 +219,14 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 	printf("Error Type A at Line %d: Illegal octal number '%s'.\n", yylineno, yytext);
 	return INT;
 }
+{ERROR_FLOAT_EXP} {
+	lex_error_happen = 1;
+	printf("Error Type A at Line %d: Illegal floating number '%s'.\n", yylineno, yytext);
+	return FLOAT;
+}
 . {
 	lex_error_happen = 1;
 	printf("Error Type A at Line %d: Mysterious characters '%s'.\n", yylineno, yytext);
-	return ERROR;
 }
 %%
 
