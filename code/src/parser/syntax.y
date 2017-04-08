@@ -2,7 +2,7 @@
 %{
 #include <string.h>
 #include <parser/datastruct.h>
-void yyerror(char *msg);
+void yyerror(const char *msg);
 
 #define YYSTYPE_IS_DECLARED 1
 typedef Node* YYSTYPE;
@@ -88,6 +88,7 @@ int parser_error_happen = 0;
 
 %nonassoc ERROR_TYPE
 %nonassoc RIGHT_TYPE
+
 %%
 Program : ExtDefList {
 		$$ = head;
@@ -108,15 +109,23 @@ ExtDefList : ExtDef ExtDefList {
 		EMPTY_SETUP
 	}
 		   ;
-ExtDef : Specifier ExtDecList SEMI {
+ExtDef : Specifier ExtDecList SEMI %prec RIGHT_TYPE {
 		MY_SYNSETUP("ExtDef", 3)
 		SIBLING3
 		MY_SYNSETUP_END
-	} 
-	   | Specifier SEMI {
+	}
+	   | Specifier ExtDecList %prec ERROR_TYPE {
+		ERROR_SETUP
+		yyerror("Missing ';'");
+	}
+	   | Specifier SEMI %prec RIGHT_TYPE {
 		MY_SYNSETUP("ExtDef", 2)
 		SIBLING2
 		MY_SYNSETUP_END
+	}
+	   | Specifier %prec ERROR_TYPE {
+		ERROR_SETUP
+		yyerror("Missing ';'");
 	}
 	   | Specifier FunDec CompSt {
 		MY_SYNSETUP("ExtDef", 3)
@@ -147,10 +156,18 @@ Specifier : TYPE {
 		MY_SYNSETUP_END
 	}
 		  ;
-StructSpecifier : STRUCT OptTag LC DefList RC {
+StructSpecifier : STRUCT OptTag LC DefList RC %prec RIGHT_TYPE {
 		MY_SYNSETUP("StructSpecifier", 5)
 		SIBLING5
 		MY_SYNSETUP_END
+	}
+				| STRUCT OptTag LC DefList %prec ERROR_TYPE {
+		ERROR_SETUP
+		yyerror("missing '}'");
+	}
+				| STRUCT OptTag DefList RC %prec ERROR_TYPE {
+		ERROR_SETUP
+		yyerror("missing '{'");
 	}
 				| STRUCT Tag {
 		MY_SYNSETUP("StructSpecifier", 2)
@@ -179,16 +196,32 @@ VarDec : ID {
 		SIBLING
 		MY_SYNSETUP_END
 	}
-	   | VarDec LB INT RB {
+	   | VarDec LB INT RB %prec RIGHT_TYPE {
 		MY_SYNSETUP("VarDec", 4)
 		SIBLING4
 		MY_SYNSETUP_END
 	}
+	   | VarDec LB INT %prec ERROR_TYPE {
+		ERROR_SETUP
+		yyerror("missing ']'");
+	}
+	   | VarDec INT RB %prec ERROR_TYPE {
+		ERROR_SETUP
+		yyerror("missing '['");
+	}
 	   ;
-FunDec : ID LP VarList RP {
+FunDec : ID LP VarList RP %prec RIGHT_TYPE {
 		MY_SYNSETUP("FunDec", 4)
 		SIBLING4
 		MY_SYNSETUP_END
+	}
+	   | ID LP VarList %prec ERROR_TYPE{
+		ERROR_SETUP
+		yyerror("missing ')'");
+	}
+	   | ID VarList RP %prec ERROR_TYPE{
+		ERROR_SETUP
+		yyerror("missing '('");
 	}
 	   | ID LP RP{
 		MY_SYNSETUP("FunDec", 3)
@@ -214,10 +247,18 @@ ParamDec : Specifier VarDec {
 	}
 		 ;
 /*Statements*/
-CompSt : LC DefList StmtList RC {
+CompSt : LC DefList StmtList RC %prec RIGHT_TYPE {
 		MY_SYNSETUP("CompSt", 4)
 		SIBLING4
 		MY_SYNSETUP_END
+	}
+	   | DefList StmtList RC %prec ERROR_TYPE {
+		ERROR_SETUP
+		yyerror("missing '{'");
+	}
+	   | LC DefList StmtList %prec ERROR_TYPE {
+		ERROR_SETUP
+		yyerror("missing '}'");
 	}
 	   | error RC {
 		ERROR_SETUP
@@ -232,20 +273,28 @@ StmtList : Stmt StmtList {
 		EMPTY_SETUP
 	}
 		 ;
-Stmt : Exp SEMI {
+Stmt : Exp SEMI %prec RIGHT_TYPE {
 		MY_SYNSETUP("Stmt", 2)
 		SIBLING2
 		MY_SYNSETUP_END
+	}
+	 | Exp %prec ERROR_TYPE {
+		ERROR_SETUP
+		yyerror("missing ';'");
 	}
 	 | CompSt {
 		MY_SYNSETUP("Stmt", 1)
 		SIBLING
 		MY_SYNSETUP_END
 	}
-	 | RETURN Exp SEMI {
+	 | RETURN Exp SEMI %prec RIGHT_TYPE {
 		MY_SYNSETUP("Stmt", 3)
 		SIBLING3
 		MY_SYNSETUP_END
+	}
+	 | RETURN Exp %prec ERROR_TYPE {
+		ERROR_SETUP
+		yyerror("missing ';'");
 	}
 	 | IF LP Exp RP Stmt %prec LOWER_THAN_ELSE {
 		MY_SYNSETUP("Stmt", 5)
@@ -276,10 +325,14 @@ DefList : Def DefList {
 		EMPTY_SETUP
 	}
 		;
-Def : Specifier DecList SEMI {
+Def : Specifier DecList SEMI %prec RIGHT_TYPE {
 		MY_SYNSETUP("Def", 3)
 		SIBLING3
 		MY_SYNSETUP_END
+	}
+	| Specifier DecList %prec ERROR_TYPE {
+		ERROR_SETUP
+		yyerror("missing ';'");
 	}
 	;
 DecList : Dec {
@@ -408,7 +461,7 @@ Args : Exp COMMA Args {
 	}
 	 ;
 %%
-void yyerror(char *msg){
+void yyerror(const char *msg){
 	parser_error_happen = 1;
 	fprintf(stderr, "Error type B at Line %d: %s.\n", yylineno, msg);
 	return;
