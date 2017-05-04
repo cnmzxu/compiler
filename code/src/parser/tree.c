@@ -1,5 +1,6 @@
 #include <stdarg.h>
 #include <string.h>
+#include <stdlib.h>
 #include "common.h"
 #include "parser/tree.h"
 

@@ -58,8 +58,8 @@ void add_symbol_entry(char* name, symbol_type *type, int lineno, table_type_clas
 		strcpy(entry->name, name);
 		entry->lineno = lineno;
 		entry->type = type;
-		table->table[table.top] = entry;
-		table->existence[table.top] = exist;
+		table->table[table->top] = entry;
+		table->existence[table->top] = exist;
 		table->top++;
 	}
 
@@ -216,8 +216,8 @@ void get_symbol_entries(symbol_table_entry *table, Tree_Node *deflist, int *leng
 		}
 		else if (strcmp(declist->type, "FunDec") == 0) {			
 			Tree_Node *CompstList = declist->sibling;
-			Tree_Node id = declist->child;
-			Tree_Node varlist = id->sibling->sibling;
+			Tree_Node *id = declist->child;
+			Tree_Node *varlist = id->sibling->sibling;
 
 			symbol_type *functype = (symbol_type *)malloc(sizeof(symbol_type));
 			functype->function_field.return_type = spetype;
@@ -229,13 +229,13 @@ void get_symbol_entries(symbol_table_entry *table, Tree_Node *deflist, int *leng
 			}
 			else
 				functype->function_field.variable = NULL;
-			if (strcmp(CompList->type, "Compst") == 0){
+			if (strcmp(CompstList->type, "Compst") == 0){
 				CompstList = CompstList->child->sibling;
 				get_symbol_entries(NULL, CompstList, &global_symbol_number);
 				stmtlist_analysis(CompstList->sibling);
 			}
 			delete_local_scope();
-			if (strcmp(CompList->type, "Compst") == 0)
+			if (strcmp(CompstList->type, "Compst") == 0)
 				add_symbol_entry(id->value, functype, declist->lineno, FUNCTION_TABLE, 1);
 			else
 				add_symbol_entry(id->value, functype, declist->lineno, FUNCTION_TABLE, 0);
@@ -262,24 +262,24 @@ void get_symbol_entries(symbol_table_entry *table, Tree_Node *deflist, int *leng
 
 symbol_type *exp_analysis(Tree_Node *exp) {
 	Tree_Node *node = node->child;
-	symbol_type int_type;
-	int_type.type = TYPE_INT;
-	symbol_type float_type;
-	float_type.type = TYPE_FLOAT;
+	symbol_type *int_type = (symbol_type *)malloc(sizeof(symbol_type));
+	int_type->type = TYPE_INT;
+	symbol_type *float_type = (symbol_type *)malloc(sizeof(symbol_type));
+	float_type->type = TYPE_FLOAT;
 
 	if (strcmp(node->type, "Exp") == 0) {
 		Tree_Node *node2 = node->sibling;
-		Tree_Node *node3 = node2->sibling
+		Tree_Node *node3 = node2->sibling;
 		if (strcmp(node2->type, "ASSIGNOP") == 0) {
 			if (strcmp(node->child->type, "RExp") == 0)
-				senmantic_error(6, node->lineno, "Exp Has no Left Value.");
+				semantic_error(6, node->lineno, "Exp Has no Left Value.");
 			else {
 				symbol_type *type1 = exp_analysis(node),
 							*type2 = exp_analysis(node3);
 				if (type1 == NULL || type2 == NULL)
 					return NULL;
 				if (!check_type_equal(type1, type2))
-					semantic_error(5, node->lineno, "Mismatched Type.")
+					semantic_error(5, node->lineno, "Mismatched Type.");
 			}
 			return NULL;
 		}
@@ -319,7 +319,7 @@ symbol_type *exp_analysis(Tree_Node *exp) {
 						*type2 = exp_analysis(node3);
 			if (type1 == NULL || type2 == NULL)
 				return NULL;
-			if (typ1->type == TYPE_INT && type2->type == TYPE_INT)
+			if (type1->type == TYPE_INT && type2->type == TYPE_INT)
 				return int_type;
 			semantic_error(7, node->lineno, "Mismatched Type.");
 			return NULL;
@@ -348,7 +348,7 @@ symbol_type *exp_analysis(Tree_Node *exp) {
 			semantic_error(1, node->lineno, "No such a variable.");
 		}
 		else {
-			Tree_Node node3 = node2->sibling;
+			Tree_Node *node3 = node2->sibling;
 			table = &function_symbol_table;
 			for (i = table->top - 1; i >= 0; i--)
 				if (table->existence[i] < 2 && strcmp(table->table[i]->name, node->value) == 0)
@@ -356,7 +356,7 @@ symbol_type *exp_analysis(Tree_Node *exp) {
 						type1 = table->table[i]->type;
 					else 
 						semantic_error(18, node->lineno, "Declared but not Defined.");
-			semantic_error(2, node->lineno, "Undefined Function.")
+			semantic_error(2, node->lineno, "Undefined Function.");
 		}
 	}
 	else if (strcmp(node->type, "LP") == 0) {
