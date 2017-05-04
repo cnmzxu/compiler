@@ -1,69 +1,56 @@
 %locations
 %{
 #include <string.h>
-#include <parser/datastruct.h>
+#include <stdlib.h>
+#include "parser/parser.h"
 void yyerror(const char *msg);
 
 #define YYSTYPE_IS_DECLARED 1
-typedef Node* YYSTYPE;
-Node space_for_head;
-YYSTYPE head = &space_for_head;
+typedef Tree_Node* YYSTYPE;
+YYSTYPE head;
 int parser_error_happen = 0;
 
 #include "lex.yy.c"
 
 #define EMPTY_SETUP \
-	Node *node = (Node *)malloc(sizeof(Node));\
-	(yyval) = node; \
-	(yyval)->child = (Node *)NULL; \
-	(yyval)->sibling = (Node *)NULL; \
-	strcpy((yyval)->type, "empty"); \
-	(yyval)->lineno = (yyloc).first_line; \
-	(yyval)->token_type = 0;
+	(yyval) = empty_setup((yyloc).first_line);
 
 #define ERROR_SETUP \
-	Node *node = (Node *)malloc(sizeof(Node));\
-	(yyval) = node; \
-	(yyval)->child = (Node *)NULL; \
-	strcpy((yyval)->type, "error");\
-	(yyval)->lineno = (yyloc).first_line;
+	(yyval) = error_setup((yyloc).first_line);
 
-#define MY_SYNSETUP(str, l) \
-	Node *node = (Node *)malloc(sizeof(Node)); \
-	(yyval) = node; \
-	(yyval)->child = (yyvsp[-(l-1)]); \
-	strcpy((yyval)->type, str);\
-	(yyval)->lineno = (yyloc).first_line;\
-	(yyval)->token_type = 0;
+#define MY_SYNSETUP(str) \
+	(yyval) = common_setup(str, (yyloc).first_line
 
-#define SIBLING
+#define SIBLING \
+	, (yyvsp[0]), NULL);
 
 #define SIBLING2 \
+	, (yyvsp[-1]) \
 	SIBLING\
-	(yyvsp[-1])->sibling = (yyvsp[0]);
 
 #define SIBLING3 \
+	, (yyvsp[-2]) \
 	SIBLING2 \
-	(yyvsp[-2])->sibling = (yyvsp[-1]);
 
 #define SIBLING4 \
+	, (yyvsp[-3]) \
 	SIBLING3 \
-	(yyvsp[-3])->sibling = (yyvsp[-2]);
 
 #define SIBLING5 \
+	, (yyvsp[-4]) \
 	SIBLING4 \
-	(yyvsp[-4])->sibling = (yyvsp[-3]);
 
 #define SIBLING6 \
+	, (yyvsp[-5]) \
 	SIBLING5 \
-	(yyvsp[-5])->sibling = (yyvsp[-4]);
 
 #define SIBLING7 \
+	, (yyvsp[-6]) \
 	SIBLING6\
-	(yyvsp[-6])->sibling = (yyvsp[-5]);
 
-#define MY_SYNSETUP_END
 %}
+
+
 
 %token INT FLOAT 
 %token ID ERROR
@@ -86,230 +73,153 @@ int parser_error_happen = 0;
 %nonassoc LOWER_THAN_ELSE
 %nonassoc ELSE
 
-%nonassoc ERROR_TYPE
-%nonassoc RIGHT_TYPE
+%error-verbose
 
 %%
 Program : ExtDefList {
-		$$ = head;
-		if ($$){
-			strcpy($$->type, "Program");
-			$$->child = $1;
-			$$->lineno = @$.first_line;
-			$$->token_type = 0;
-		}
+		MY_SYNSETUP("Program")
+		SIBLING
+		head = $$;
 	}
 		;
 ExtDefList : ExtDef ExtDefList {
-		MY_SYNSETUP("ExtDefList", 2)
+		MY_SYNSETUP("ExtDefList")
 		SIBLING2
-		MY_SYNSETUP_END
 	}
 		   | /* empty */ {
 		EMPTY_SETUP
 	}
 		   ;
-ExtDef : Specifier ExtDecList SEMI %prec RIGHT_TYPE {
-		MY_SYNSETUP("ExtDef", 3)
+ExtDef : Specifier ExtDecList SEMI {
+		MY_SYNSETUP("ExtDef")
 		SIBLING3
-		MY_SYNSETUP_END
 	}
-	   | Specifier ExtDecList %prec ERROR_TYPE {
-		ERROR_SETUP
-		yyerror("Missing ';'");
-	}
-	   | Specifier SEMI %prec RIGHT_TYPE {
-		MY_SYNSETUP("ExtDef", 2)
+	   | Specifier SEMI {
+		MY_SYNSETUP("ExtDef")
 		SIBLING2
-		MY_SYNSETUP_END
-	}
-	   | Specifier %prec ERROR_TYPE {
-		ERROR_SETUP
-		yyerror("Missing ';'");
 	}
 	   | Specifier FunDec CompSt {
-		MY_SYNSETUP("ExtDef", 3)
+		MY_SYNSETUP("ExtDef")
 		SIBLING3
-		MY_SYNSETUP_END
+	}  | Specifier FunDec SEMI {
+		MY_SYNSETUP("ExtDef")
+		SIBLING3
 	}
 	   ;
 ExtDecList : VarDec {
-		MY_SYNSETUP("ExtDecList", 1)
+		MY_SYNSETUP("ExtDecList")
 		SIBLING
-		MY_SYNSETUP_END
 	}
 		   | VarDec COMMA ExtDecList {
-		MY_SYNSETUP("ExtDecList", 3)
+		MY_SYNSETUP("ExtDecList")
 		SIBLING3
-		MY_SYNSETUP_END
 	}
 		   ;
 /* Specifiers */
 Specifier : TYPE {
-		MY_SYNSETUP("Specifier", 1)
+		MY_SYNSETUP("Specifier")
 		SIBLING
-		MY_SYNSETUP_END
 	}
 		  | StructSpecifier {
-		MY_SYNSETUP("Specifier", 1)
+		MY_SYNSETUP("Specifier")
 		SIBLING
-		MY_SYNSETUP_END
 	}
 		  ;
-StructSpecifier : STRUCT OptTag LC DefList RC %prec RIGHT_TYPE {
-		MY_SYNSETUP("StructSpecifier", 5)
+StructSpecifier : STRUCT OptTag LC DefList RC {
+		MY_SYNSETUP("StructSpecifier")
 		SIBLING5
-		MY_SYNSETUP_END
-	}
-				| STRUCT OptTag LC DefList %prec ERROR_TYPE {
-		ERROR_SETUP
-		yyerror("missing '}'");
-	}
-				| STRUCT OptTag DefList RC %prec ERROR_TYPE {
-		ERROR_SETUP
-		yyerror("missing '{'");
 	}
 				| STRUCT Tag {
-		MY_SYNSETUP("StructSpecifier", 2)
+		MY_SYNSETUP("StructSpecifier")
 		SIBLING2
-		MY_SYNSETUP_END
 	} 
 				;
 OptTag : ID {
-		MY_SYNSETUP("OptTag", 1)
+		MY_SYNSETUP("OptTag")
 		SIBLING
-		MY_SYNSETUP_END
 	}
 	   | /* empty */ {
 		EMPTY_SETUP
 	}
 	   ;
 Tag : ID {
-		MY_SYNSETUP("Tag", 1)
+		MY_SYNSETUP("Tag")
 		SIBLING
-		MY_SYNSETUP_END
 	}
 	;
 /* Declarators */
 VarDec : ID {
-		MY_SYNSETUP("VarDec", 1)
+		MY_SYNSETUP("VarDec")
 		SIBLING
-		MY_SYNSETUP_END
 	}
-	   | VarDec LB INT RB %prec RIGHT_TYPE {
-		MY_SYNSETUP("VarDec", 4)
+	   | VarDec LB INT RB {
+		MY_SYNSETUP("VarDec")
 		SIBLING4
-		MY_SYNSETUP_END
-	}
-	   | VarDec LB INT %prec ERROR_TYPE {
-		ERROR_SETUP
-		yyerror("missing ']'");
-	}
-	   | VarDec INT RB %prec ERROR_TYPE {
-		ERROR_SETUP
-		yyerror("missing '['");
 	}
 	   ;
-FunDec : ID LP VarList RP %prec RIGHT_TYPE {
-		MY_SYNSETUP("FunDec", 4)
+FunDec : ID LP VarList RP {
+		MY_SYNSETUP("FunDec")
 		SIBLING4
-		MY_SYNSETUP_END
-	}
-	   | ID LP VarList %prec ERROR_TYPE{
-		ERROR_SETUP
-		yyerror("missing ')'");
-	}
-	   | ID VarList RP %prec ERROR_TYPE{
-		ERROR_SETUP
-		yyerror("missing '('");
 	}
 	   | ID LP RP{
-		MY_SYNSETUP("FunDec", 3)
+		MY_SYNSETUP("FunDec")
 		SIBLING3
-		MY_SYNSETUP_END
 	}
 	   ;
 VarList : ParamDec COMMA VarList {
-		MY_SYNSETUP("VarList", 3)
+		MY_SYNSETUP("VarList")
 		SIBLING3
-		MY_SYNSETUP_END
 	}
 		| ParamDec {
-		MY_SYNSETUP("VarList", 1)
+		MY_SYNSETUP("VarList")
 		SIBLING
-		MY_SYNSETUP_END
 	}
 		;
 ParamDec : Specifier VarDec {
-		MY_SYNSETUP("ParamDec", 2)
+		MY_SYNSETUP("ParamDec")
 		SIBLING2
-		MY_SYNSETUP_END
 	}
 		 ;
 /*Statements*/
-CompSt : LC DefList StmtList RC %prec RIGHT_TYPE {
-		MY_SYNSETUP("CompSt", 4)
+CompSt : LC DefList StmtList RC {
+		MY_SYNSETUP("CompSt")
 		SIBLING4
-		MY_SYNSETUP_END
-	}
-	   | DefList StmtList RC %prec ERROR_TYPE {
-		ERROR_SETUP
-		yyerror("missing '{'");
-	}
-	   | LC DefList StmtList %prec ERROR_TYPE {
-		ERROR_SETUP
-		yyerror("missing '}'");
 	}
 	   | error RC {
 		ERROR_SETUP
 	}
 	   ;
 StmtList : Stmt StmtList {
-		MY_SYNSETUP("StmtList", 2)
+		MY_SYNSETUP("StmtList")
 		SIBLING2
-		MY_SYNSETUP_END
 	}
 		 | /* empty */{
 		EMPTY_SETUP
 	}
 		 ;
-Stmt : Exp SEMI %prec RIGHT_TYPE {
-		MY_SYNSETUP("Stmt", 2)
+Stmt : Exp SEMI {
+		MY_SYNSETUP("Stmt")
 		SIBLING2
-		MY_SYNSETUP_END
-	}
-	 | Exp %prec ERROR_TYPE {
-		ERROR_SETUP
-		yyerror("missing ';'");
 	}
 	 | CompSt {
-		MY_SYNSETUP("Stmt", 1)
+		MY_SYNSETUP("Stmt")
 		SIBLING
-		MY_SYNSETUP_END
 	}
-	 | RETURN Exp SEMI %prec RIGHT_TYPE {
-		MY_SYNSETUP("Stmt", 3)
+	 | RETURN Exp SEMI {
+		MY_SYNSETUP("Stmt")
 		SIBLING3
-		MY_SYNSETUP_END
-	}
-	 | RETURN Exp %prec ERROR_TYPE {
-		ERROR_SETUP
-		yyerror("missing ';'");
 	}
 	 | IF LP Exp RP Stmt %prec LOWER_THAN_ELSE {
-		MY_SYNSETUP("Stmt", 5)
+		MY_SYNSETUP("Stmt")
 		SIBLING5
-		MY_SYNSETUP_END
 	}
 	 | IF LP Exp RP Stmt ELSE Stmt {
-		MY_SYNSETUP("Stmt", 7)
+		MY_SYNSETUP("Stmt")
 		SIBLING7
-		MY_SYNSETUP_END
 	}
 	 | WHILE LP Exp RP Stmt {
-		MY_SYNSETUP("Stmt", 5)
+		MY_SYNSETUP("Stmt")
 		SIBLING5
-		MY_SYNSETUP_END
 	}
 	 | error SEMI {
 		ERROR_SETUP
@@ -317,147 +227,130 @@ Stmt : Exp SEMI %prec RIGHT_TYPE {
 	 ;
 /* Local Definitions */
 DefList : Def DefList {
-		MY_SYNSETUP("DefList", 2)
+		MY_SYNSETUP("DefList")
 		SIBLING2
-		MY_SYNSETUP_END
 	}
 		| /* empty */{
 		EMPTY_SETUP
 	}
 		;
-Def : Specifier DecList SEMI %prec RIGHT_TYPE {
-		MY_SYNSETUP("Def", 3)
+Def : Specifier DecList SEMI {
+		MY_SYNSETUP("Def")
 		SIBLING3
-		MY_SYNSETUP_END
-	}
-	| Specifier DecList %prec ERROR_TYPE {
-		ERROR_SETUP
-		yyerror("missing ';'");
 	}
 	;
 DecList : Dec {
-		MY_SYNSETUP("DecList", 1)
+		MY_SYNSETUP("DecList")
 		SIBLING
-		MY_SYNSETUP_END
 	}
 		| Dec COMMA DecList {
-		MY_SYNSETUP("DecList", 3)
+		MY_SYNSETUP("DecList")
 		SIBLING3
-		MY_SYNSETUP_END
 	}
 		;
 Dec : VarDec {
-		MY_SYNSETUP("Dec", 1)
+		MY_SYNSETUP("Dec")
 		SIBLING
-		MY_SYNSETUP_END
 	}
 	| VarDec ASSIGNOP Exp {
-		MY_SYNSETUP("Dec", 3)
+		MY_SYNSETUP("Dec")
 		SIBLING3
-		MY_SYNSETUP_END
 	}
 	;
 /* Expressions */
-Exp : Exp ASSIGNOP Exp {
-		MY_SYNSETUP("Exp", 3)
-		SIBLING3
-		MY_SYNSETUP_END
-	}
-	| Exp AND Exp {
-		MY_SYNSETUP("Exp", 3)
-		SIBLING3
-		MY_SYNSETUP_END
-	}
-	| Exp OR Exp {
-		MY_SYNSETUP("Exp", 3)
-		SIBLING3
-		MY_SYNSETUP_END
-	}
-	| Exp RELOP Exp {
-		MY_SYNSETUP("Exp", 3)
-		SIBLING3
-		MY_SYNSETUP_END
-	}
-	| Exp PLUS Exp {
-		MY_SYNSETUP("Exp", 3)
-		SIBLING3
-		MY_SYNSETUP_END
-	} 
-	| Exp MINUS Exp {
-		MY_SYNSETUP("Exp", 3)
-		SIBLING3
-		MY_SYNSETUP_END
-	}
-	| Exp STAR Exp {
-		MY_SYNSETUP("Exp", 3)
-		SIBLING3
-		MY_SYNSETUP_END
-	} 
-	| Exp DIV Exp {
-		MY_SYNSETUP("Exp", 3)
-		SIBLING3
-		MY_SYNSETUP_END
-	} 
-	| LP Exp RP {
-		MY_SYNSETUP("Exp", 3)
-		SIBLING3
-		MY_SYNSETUP_END
-	}
-	| MINUS Exp {
-		MY_SYNSETUP("Exp", 2)
-		SIBLING2
-		MY_SYNSETUP_END
- 	} 
-	| NOT Exp {
-		MY_SYNSETUP("Exp", 2)
-		SIBLING2
-		MY_SYNSETUP_END
-	} 
-	| ID LP Args RP {
-		MY_SYNSETUP("Exp", 4)
-		SIBLING4
-		MY_SYNSETUP_END
-	} 
-	| ID LP RP {
-		MY_SYNSETUP("Exp", 3)
-		SIBLING3
-		MY_SYNSETUP_END
-	}
-	| Exp LB Exp RB {
-		MY_SYNSETUP("Exp", 4)
-		SIBLING4
-		MY_SYNSETUP_END
-	} 
-	| Exp DOT ID {
-		MY_SYNSETUP("Exp", 3)
-		SIBLING3
-		MY_SYNSETUP_END
-	} 
-	| ID {
-		MY_SYNSETUP("Exp", 1)
+Exp : LExp {
+		MY_SYNSETUP("Exp")
 		SIBLING
-		MY_SYNSETUP_END
-	} 
-	| INT { 
-		MY_SYNSETUP("Exp", 1)
+	}
+	| RExp {
+		MY_SYNSETUP("Exp")
 		SIBLING
-		MY_SYNSETUP_END
-	} 
-	| FLOAT {
-		MY_SYNSETUP("Exp", 1)
-		SIBLING
-		MY_SYNSETUP_END
 	}
 	;
-Args : Exp COMMA Args {
-		MY_SYNSETUP("Args", 3)
+
+RExp : Exp ASSIGNOP Exp {
+		MY_SYNSETUP("RExp")
 		SIBLING3
-		MY_SYNSETUP_END
+	}
+	| Exp AND Exp {
+		MY_SYNSETUP("RExp")
+		SIBLING3
+	}
+	| Exp OR Exp {
+		MY_SYNSETUP("RExp")
+		SIBLING3
+	}
+	| Exp RELOP Exp {
+		MY_SYNSETUP("RExp")
+		SIBLING3
+	}
+	| Exp PLUS Exp {
+		MY_SYNSETUP("RExp")
+		SIBLING3
+	} 
+	| Exp MINUS Exp {
+		MY_SYNSETUP("RExp")
+		SIBLING3
+	}
+	| Exp STAR Exp {
+		MY_SYNSETUP("RExp")
+		SIBLING3
+	} 
+	| Exp DIV Exp {
+		MY_SYNSETUP("RExp")
+		SIBLING3
+	} 
+	| LP Exp RP {
+		MY_SYNSETUP("RExp")
+		SIBLING3
+	}
+	| MINUS Exp {
+		MY_SYNSETUP("RExp")
+		SIBLING2
+ 	} 
+	| NOT Exp {
+		MY_SYNSETUP("RExp")
+		SIBLING2
+	} 
+	| ID LP Args RP {
+		MY_SYNSETUP("RExp")
+		SIBLING4
+	} 
+	| ID LP RP {
+		MY_SYNSETUP("RExp")
+		SIBLING3
+	}
+	| INT { 
+		MY_SYNSETUP("RExp")
+		SIBLING
+	} 
+	| FLOAT {
+		MY_SYNSETUP("RExp")
+		SIBLING
+	}
+	;
+
+LExp : ID {
+		MY_SYNSETUP("LExp")
+		SIBLING
+	 }
+	 | Exp LB Exp RB {
+		MY_SYNSETUP("LExp")
+		SIBLING4
+	 }
+	 | Exp DOT ID {
+		MY_SYNSETUP("LExp")
+		SIBLING3
+	 }
+	 ;
+
+Args : Exp COMMA Args {
+		MY_SYNSETUP("Args")
+		SIBLING3
 	}
 	 | Exp {
-		MY_SYNSETUP("Args", 1)
+		MY_SYNSETUP("Args")
 		SIBLING
-		MY_SYNSETUP_END
 	}
 	 ;
 %%

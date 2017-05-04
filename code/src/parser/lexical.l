@@ -11,10 +11,10 @@ int yycolumn = 0;
 	yycolumn += yyleng - 1;
 
 #define MY_LEXSETUP(name) \
-	Node *lexval = (Node *)malloc(sizeof(Node)); \
+	Tree_Node *lexval = (Tree_Node *)malloc(sizeof(Tree_Node)); \
 	yylval = lexval;\
 	yylval->lineno = yylineno;\
-	yylval->token_type = 1;\
+	yylval->token_type = LEX_TOKEN;\
 	strcpy(yylval->type, name)
 	
 
@@ -97,31 +97,31 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 {TYPE} {
 	MY_LEXSETUP("TYPE");
 	strcpy(yylval->value, yytext);
-	yylval->token_type = 7;
+	yylval->token_type = LEX_TYPE;
     return TYPE;
 }
 {INT_DEC} {
 	MY_LEXSETUP("INT");
 	strcpy(yylval->value, yytext);
-	yylval->token_type = 2;
+	yylval->token_type = LEX_INT;
     return INT;
 }
 {INT_HEX} {
 	MY_LEXSETUP("INT");
 	strcpy(yylval->value, yytext);
-	yylval->token_type = 3;
+	yylval->token_type = LEX_INT;
     return INT;
 }
 {INT_OCT} {
 	MY_LEXSETUP("INT");
 	strcpy(yylval->value, yytext);
-	yylval->token_type = 4;
+	yylval->token_type = LEX_INT;
     return INT;
 }
 {FLOAT} {
 	MY_LEXSETUP("FLOAT");
 	strcpy(yylval->value, yytext);
-	yylval->token_type = 5;
+	yylval->token_type = LEX_FLOAT;
 	return FLOAT;
 }
 {RELOP} {
@@ -187,7 +187,7 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 {ID} {
 	MY_LEXSETUP("ID");
 	strcpy(yylval->value, yytext);
-	yylval->token_type = 6;
+	yylval->token_type = LEX_ID;
     return ID;
 }
 
