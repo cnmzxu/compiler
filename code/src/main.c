@@ -29,8 +29,10 @@ int main(int argc,char** argv){
 			fclose(f);
 		}
 	}
-	if (!parser_error_happen && !lex_error_happen);
-
+	if (!parser_error_happen && !lex_error_happen){
+		semantic_analysis(head);
+	}
+		
 	return 0;
 }
 

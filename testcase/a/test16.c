@@ -6,7 +6,7 @@ struct Position
 struct Position
 {
 	int y;
-}
+};
 
 int main()
 {
