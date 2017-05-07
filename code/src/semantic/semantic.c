@@ -20,8 +20,11 @@ bool check_type_equal(symbol_type *type1, symbol_type *type2) {
 
 	if (type1->type != type2->type)
 		return false;
-	else if (type1->type == TYPE_ARRAY)
+	else if (type1->type == TYPE_ARRAY) {
+		if (type1->array_field.length != type2->array_field.length)
+			return false;
 		return (check_type_equal(type1->array_field.subtype, type2->array_field.subtype));
+	}
 	else if(type1->type == TYPE_STRUCT) {
 		if (type1->struct_field.table_length != type2->struct_field.table_length)
 			return false;
