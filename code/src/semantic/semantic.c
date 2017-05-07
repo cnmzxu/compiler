@@ -289,16 +289,10 @@ void get_symbol_entries(symbol_table_entry *table, Tree_Node *deflist, int *leng
 				Tree_Node *dec = declist->child;
 				vardec = dec->child;
 				if (vardec->sibling != NULL){
+
 					symbol_type *type1 = exp_analysis(vardec->sibling->sibling);
-					if (type1 == NULL){
-						declist = dec->child;
-						continue; 
-					}
-					if(!check_type_equal(type1, analysis_vardec(spetype, vardec))) {
+					if (type1 != NULL && !check_type_equal(type1, analysis_vardec(spetype, vardec)))
 						semantic_error(5, vardec->lineno, "Mismatched Type");
-						declist = dec->sibling;
-						continue;
-					}
 				}
 				else
 					analysis_vardec(spetype, vardec);				
@@ -314,7 +308,7 @@ void get_symbol_entries(symbol_table_entry *table, Tree_Node *deflist, int *leng
 			deflist = deflist->child->sibling;
 			if (deflist == NULL)
 				break;
-			deflist = deflist->sibling->sibling;
+			deflist = deflist->sibling;
 		}
 		else if (strcmp(declist->type, "SEMI") == 0){
 			deflist = deflist->child->sibling;
