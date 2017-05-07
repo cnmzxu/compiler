@@ -4,7 +4,7 @@
 #include "semantic/semantic.h"
 #include "parser/tree.h"
 #include "common.h"
-
+int global_symbol_number = 0;
 void semantic_error(int error_type, int lineno, char *msg){
 	printf("Error Type %d at Line %d: %s\n",error_type, lineno, msg);
 }
@@ -163,7 +163,7 @@ symbol_type *get_type(Tree_Node *specifier) {
 			free(type);
 			type = NULL;
 			for (i = 0; i < struct_symbol_table.top; i++)
-				if (strcmp(id, struct_symbol_table.table[i]->name) == 0){
+				if (struct_symbol_table.existence[i] < 2 && strcmp(id, struct_symbol_table.table[i]->name) == 0){
 					type = struct_symbol_table.table[i]->type;
 					break;
 				}

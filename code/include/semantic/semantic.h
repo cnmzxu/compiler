@@ -66,7 +66,7 @@ symbol_type *exp_analysis(Tree_Node *exp);
 
 int semantic_analysis(Tree_Node *head);
 
-int global_symbol_number = 0;
+extern int global_symbol_number;
 
 symbol_type *now_return_type;
 
