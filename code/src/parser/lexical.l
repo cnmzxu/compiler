@@ -126,30 +126,37 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 }
 {RELOP} {
 	MY_LEXSETUP("RELOP");
+	strcpy(yylval->value, yytext);
     return RELOP;
 }
 {PLUS} {
 	MY_LEXSETUP("PLUS");
+	strcpy(yylval->value, yytext);
     return PLUS;
 }
 {MINUS} {
 	MY_LEXSETUP("MINUS");
+	strcpy(yylval->value, yytext);
     return MINUS;
 }
 {STAR} {
 	MY_LEXSETUP("STAR");
+	strcpy(yylval->value, yytext);
     return STAR;
 }
 {DIV} {
 	MY_LEXSETUP("DIV");
+	strcpy(yylval->value, yytext);
     return DIV;
 }
 {AND} {
 	MY_LEXSETUP("AND");
+	strcpy(yylval->value, yytext);
     return AND;
 }
 {OR} {
 	MY_LEXSETUP("OR");
+	strcpy(yylval->value, yytext);
     return OR;
 }
 {DOT} {
@@ -158,6 +165,7 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 }
 {NOT} {
 	MY_LEXSETUP("NOT");
+	strcpy(yylval->value, yytext);
     return NOT;
 }
 {LP} {

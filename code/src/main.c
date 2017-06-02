@@ -6,7 +6,7 @@
 #include "parser/parser.h"
 #include "parser/syntax.tab.h"
 #include "semantic/semantic.h"
-
+#include "intercode/intercode.h"
 void error(char *msg) {
 	printf("%s\n", msg);
 }
@@ -30,7 +30,7 @@ int main(int argc,char** argv){
 		}
 	}
 	if (!parser_error_happen && !lex_error_happen){
-		semantic_analysis(head);
+		translate(head);
 	}
 		
 	return 0;

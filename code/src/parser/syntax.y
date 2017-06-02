@@ -258,91 +258,97 @@ Dec : VarDec {
 	}
 	;
 /* Expressions */
-Exp : LExp {
+Exp : Exp ASSIGNOP Exp {
 		MY_SYNSETUP("Exp")
-		SIBLING
-	}
-	| RExp {
-		MY_SYNSETUP("Exp")
-		SIBLING
-	}
-	;
-
-RExp : Exp ASSIGNOP Exp {
-		MY_SYNSETUP("RExp")
 		SIBLING3
+		$$->value[0] = 0;
 	}
 	| Exp AND Exp {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING3
+		$$->value[0] = 0;
 	}
 	| Exp OR Exp {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING3
+		$$->value[0] = 0;
 	}
 	| Exp RELOP Exp {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING3
+		$$->value[0] = 0;
 	}
 	| Exp PLUS Exp {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING3
+		$$->value[0] = 0;
 	} 
 	| Exp MINUS Exp {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING3
+		$$->value[0] = 0;
 	}
 	| Exp STAR Exp {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING3
+		$$->value[0] = 0;
 	} 
 	| Exp DIV Exp {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING3
+		$$->value[0] = 0;
 	} 
 	| LP Exp RP {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING3
+		$$->value[0] = 0;
 	}
 	| MINUS Exp {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING2
+		$$->value[0] = 0;
  	} 
 	| NOT Exp {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING2
+		$$->value[0] = 0;
 	} 
 	| ID LP Args RP {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING4
+		$$->value[0] = 0;
 	} 
 	| ID LP RP {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING3
+		$$->value[0] = 0;
 	}
 	| INT { 
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING
+		$$->value[0] = 0;
 	} 
 	| FLOAT {
-		MY_SYNSETUP("RExp")
+		MY_SYNSETUP("Exp")
 		SIBLING
+		$$->value[0] = 0;
+	}
+	| ID {
+		MY_SYNSETUP("Exp")
+		SIBLING
+		$$->value[0] = 0;
+	}
+	| Exp LB Exp RB {
+		MY_SYNSETUP("Exp")
+		SIBLING4
+		$$->value[0] = 0;
+	}
+	| Exp DOT ID {
+		MY_SYNSETUP("Exp")
+		SIBLING3
+		$$->value[0] = 0;
 	}
 	;
-
-LExp : ID {
-		MY_SYNSETUP("LExp")
-		SIBLING
-	 }
-	 | Exp LB Exp RB {
-		MY_SYNSETUP("LExp")
-		SIBLING4
-	 }
-	 | Exp DOT ID {
-		MY_SYNSETUP("LExp")
-		SIBLING3
-	 }
-	 ;
 
 Args : Exp COMMA Args {
 		MY_SYNSETUP("Args")

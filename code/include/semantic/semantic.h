@@ -15,6 +15,7 @@ typedef enum {STRUCT_TABLE, FUNCTION_TABLE, VARIABLE_TABLE} table_type_class;
 
 typedef struct symbol_type_struct {
 	symbol_type_class type;
+	int size;
 	union {
 		struct {
 			int length;
@@ -56,15 +57,9 @@ void delete_local_scope();
 
 symbol_type *get_type(Tree_Node *specifier);
 
-void get_symbol_entries(symbol_table_entry *table, Tree_Node *deflist, int *length, table_type_class type);
-
-symbol_type *exp_analysis(Tree_Node *exp);
-
-void stmtlist_analysis(Tree_Node *stmtlist);
-
-symbol_type *exp_analysis(Tree_Node *exp);
-
 int semantic_analysis(Tree_Node *head);
+
+void get_symbol_entries(symbol_table_entry *table, Tree_Node *deflist, int *length);
 
 extern int global_symbol_number;
 
