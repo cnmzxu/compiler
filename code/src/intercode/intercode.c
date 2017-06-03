@@ -1340,7 +1340,7 @@ symbol_type *translateExp(Tree_Node *exp, int flag, char *dest) {
 		if (node2 == NULL){
 			for (i = variable_symbol_table.top - 1; i >=0; i--){
 				symbol_table_entry *table = variable_symbol_table.table[i];
-				if (strcmp(table->name, node->value) == 0) {
+				if (variable_symbol_table.existence[i] >= 0 && strcmp(table->name, node->value) == 0) {
 					if (table->type->type == TYPE_INT){
 						if (flag == 0)
 							fprintf(outfile, "%s := %s\n", dest, node->value);

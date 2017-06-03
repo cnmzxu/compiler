@@ -10,7 +10,6 @@ void semantic_error(int error_type, int lineno, char *msg){
 }
 
 bool check_type_equal(symbol_type *type1, symbol_type *type2) {
-	printf("check_type_equal\n");
 	if (type1 == type2)
 		return true;
 	if (type1 == NULL)
@@ -151,7 +150,6 @@ void delete_local_scope() {
 }
 
 symbol_type *get_type(Tree_Node *specifier) {
-	printf("get_type\n");
 	symbol_type *type = (symbol_type *)malloc(sizeof(symbol_type));
 	Tree_Node *child = specifier->child;
 	if (strcmp(child->type, "TYPE") == 0){
@@ -196,7 +194,6 @@ symbol_type *get_type(Tree_Node *specifier) {
 }
 
 void get_symbol_entries(symbol_table_entry *table, Tree_Node *deflist, int *length) {
-	printf("get_symbol_entries\n");
 	int tag = 0;
 	symbol_type *analysis_vardec(symbol_type *type, Tree_Node *vardec) {
 		while(1) {
