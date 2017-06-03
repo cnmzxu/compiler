@@ -130,7 +130,7 @@ bool add_symbol_entry(char* name, symbol_type *type, int lineno, table_type_clas
 void creat_new_scope() {
 	void push_stack(symbol_table *table) {
 		table->table[table->top] = (symbol_table_entry *)table->local_bottom;
-		table->existence[table->top] = 2;
+		table->existence[table->top] = -1;
 		table->top = table->top + 1;
 		table->local_bottom = table->top;
 	}
@@ -185,11 +185,11 @@ symbol_type *get_type(Tree_Node *specifier) {
 			delete_local_scope();
 			
 			int i = 0;
-			symbol_table_entry *table = type->struct_field.field_table; 
+			symbol_table_entry *table = type->struct_field.field_table;
+			type->size = 0;
 			for (i = 0; i < type->struct_field.table_length; i++)
-				type->size += table[i].type->size;
-			if (strcmp(child->type, "OptTag") == 0)
-				add_symbol_entry(child->child->value, type, child->child->lineno, STRUCT_TABLE, 1);
+				type->size = type->size + table[i].type->size;
+			add_symbol_entry(child->child->value, type, child->child->lineno, STRUCT_TABLE, 1);
 		}
 	}
 	return type;

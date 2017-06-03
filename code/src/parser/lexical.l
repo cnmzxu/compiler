@@ -34,14 +34,14 @@ COMMA ","
 ASSIGNOP "="
 TYPE "int"|"float"
 BLANK [\n\t\r\f\v ]+
-INT_DEC [+-]?([1-9][0-9]*)|0
-INT_HEX [+-]?0[xX][0-9a-fA-F]+
-INT_OCT [+-]?0[0-7]+
+INT_DEC ([1-9][0-9]*)|0
+INT_HEX 0[xX][0-9a-fA-F]+
+INT_OCT 0[0-7]+
 ERROR_HEX 0[xX][0-9a-zA-Z]+
 ERROR_OCT 0[0-9]+
 FLOAT_NOR [0-9]+\.[0-9]+
 FLOAT_EXP (([0-9]+\.[0-9]*)|([0-9]*\.[0-9]+))(E|e)[+-]?[0-9]+
-FLOAT [+-]?({FLOAT_NOR}|{FLOAT_EXP})
+FLOAT ({FLOAT_NOR}|{FLOAT_EXP})
 ERROR_FLOAT_EXP [0-9]*\.[0-9]*(E|e)[+-]?[0-9]*
 RELOP >|<|>=|<=|==|!=
 PLUS "+"
@@ -100,6 +100,11 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 	yylval->token_type = LEX_TYPE;
     return TYPE;
 }
+{MINUS} {
+	MY_LEXSETUP("MINUS");
+	strcpy(yylval->value, yytext);
+    return MINUS;
+}
 {INT_DEC} {
 	MY_LEXSETUP("INT");
 	strcpy(yylval->value, yytext);
@@ -133,11 +138,6 @@ ID [_a-zA-Z][_a-zA-Z0-9]*
 	MY_LEXSETUP("PLUS");
 	strcpy(yylval->value, yytext);
     return PLUS;
-}
-{MINUS} {
-	MY_LEXSETUP("MINUS");
-	strcpy(yylval->value, yytext);
-    return MINUS;
 }
 {STAR} {
 	MY_LEXSETUP("STAR");

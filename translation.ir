@@ -1,0 +1,42 @@
+FUNCTION great :
+PARAM a
+PARAM b
+ans1 := #0
+IF a <= b GOTO label1
+ans1 := #1
+LABEL label1 :
+RETURN ans1
+FUNCTION nequal :
+PARAM c
+PARAM d
+ans2 := #0
+IF c > d GOTO label3
+IF c >= d GOTO label2
+LABEL label3 :
+ans2 := #1
+LABEL label2 :
+RETURN ans2
+FUNCTION main :
+READ x
+ARG #0
+ARG x
+v1 := CALL nequal
+IF v1 == #0 GOTO label4
+ARG #0
+ARG x
+v2 := CALL great
+IF v2 == #0 GOTO label6
+ans := #1
+LABEL label6 :
+ARG x
+ARG #0
+v3 := CALL great
+IF v3 == #0 GOTO label7
+ans := #-1
+LABEL label7 :
+GOTO label5
+LABEL label4 :
+ans := #0
+LABEL label5 :
+WRITE ans
+RETURN ans
