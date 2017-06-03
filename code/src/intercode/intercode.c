@@ -42,7 +42,7 @@ int translate(Tree_Node *node) {
 }
 
 int translateExtDefList(Tree_Node *node) {
-	printf("extdeflist\n");
+	//printf("extdeflist\n");
 	if (strcmp(node->type, "ExtDefList") == 0){
 		node = node->child;
 		if (node != NULL){
@@ -55,7 +55,7 @@ int translateExtDefList(Tree_Node *node) {
 }
 
 int translateExtDef(Tree_Node *extdef) {
-	printf("extdef\n");
+	//printf("extdef\n");
 	extdef = extdef->child;
 	symbol_type *type = get_type(extdef);
 	extdef = extdef->sibling;
@@ -135,7 +135,7 @@ int translateExtDef(Tree_Node *extdef) {
 }
 
 int translateDefList(Tree_Node *deflist) {
-	printf("deflist\n");
+	//printf("deflist\n");
 	if (strcmp(deflist->type, "empty") == 0)
 		return 0;
 	Tree_Node *def = deflist->child;
@@ -183,7 +183,7 @@ int translateDefList(Tree_Node *deflist) {
 }
 
 int translateStmtList(Tree_Node *stmtlist, int label) {
-	printf("stmtlist\n");
+	//printf("stmtlist\n");
 	while (1) {
 		if (strcmp(stmtlist->type, "empty") == 0){
 			if (label != 0) {
@@ -199,7 +199,7 @@ int translateStmtList(Tree_Node *stmtlist, int label) {
 }
 
 int translateStmt(Tree_Node *stmt, int label) {
-	printf("stmt\n");
+	//printf("stmt\n");
 	stmt = stmt->child;
 	if (strcmp(stmt->type, "Exp") == 0) {
 		translateExp(stmt, 0, NULL);
@@ -299,7 +299,7 @@ int translateStmt(Tree_Node *stmt, int label) {
 }
 
 expans analysisExp(Tree_Node *node) {
-	printf("anaexp\n");
+	//printf("anaexp\n");
 	expans ans;
 	ans.flag = 0;
 	if (node->value[0] == 1) {
@@ -444,7 +444,7 @@ expans analysisExp(Tree_Node *node) {
 }
 
 int translateCon(Tree_Node *node, int truelabel, int falselabel) {
-	printf("con\n");
+	//printf("con\n");
 	node = node->child;
 	if (truelabel == falselabel && truelabel != 0)
 		fprintf(outfile, "GOTO label%d\n", truelabel);
@@ -1207,7 +1207,7 @@ int translateCon(Tree_Node *node, int truelabel, int falselabel) {
 }
 
 symbol_type *translateExp(Tree_Node *exp, int flag, char *dest) {
-	printf("exp\n");
+	//printf("exp\n");
 	// flag = 0 : value, flag = 1 : address
 	symbol_type *int_type = (symbol_type *)malloc(sizeof(symbol_type));
 	int_type->type = TYPE_INT;
@@ -1373,7 +1373,7 @@ symbol_type *translateExp(Tree_Node *exp, int flag, char *dest) {
 							int tempvar1 = gettempvar();
 							char dest1[20];
 							sprintf(dest1, "v%d", tempvar1);
-							translateExp(node2, 1, dest1);
+							translateExp(node2, 0, dest1);
 							fprintf(outfile, "WRITE %s\n", dest1);
 						}
 					}
