@@ -78,6 +78,7 @@ main:
 move $fp, $sp
 addi $sp, $sp, -4
 addi $sp, $sp, -4
+addi $sp, $sp, -4
 sw $ra, 0($sp)
 addi $sp, $sp, -4
 sw $8, 0($sp)

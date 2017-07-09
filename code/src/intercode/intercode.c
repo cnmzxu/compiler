@@ -111,8 +111,10 @@ int translateExtDef(Tree_Node *extdef) {
 		functype->function_field.variable = variable;
 		Tree_Node *fundec = extdef->child;
 		fprintf(outfile, "%s:\n", fundec->value);
-		if (strcmp(fundec->value, "main") == 0)
+		if (strcmp(fundec->value, "main") == 0) {
 			fprintf(outfile, "move $fp, $sp\n");
+			fprintf(outfile, "addi $sp, $sp, -4\n");
+		}
 		add_function_symbol_entry(fundec->value, functype, fundec->lineno, 1);
 		fundec = fundec->sibling->sibling;
 		Tree_Node *temp;
@@ -807,24 +809,32 @@ int translateCon(Tree_Node *node, int truelabel, int falselabel) {
 				analysisArgs(node2);
 			}
 			
-			fprintf(outfile, "sw $v0, 0($sp)\n");
-			fprintf(outfile, "addi $sp, $sp, -4\n");
 			fprintf(outfile, "sw $ra, 0($sp)\n");
 			fprintf(outfile, "addi $sp, $sp, -4\n");
+
+			fprintf(outfile, "sw $8, 0($sp)\n");
+			fprintf(outfile, "addi $sp, $sp, -4\n");
+			fprintf(outfile, "sw $9, 0($sp)\n");
+			fprintf(outfile, "addi $sp, $sp, -4\n");
+
 
 			fprintf(outfile, "sw $fp, 0($sp)\n");
 			fprintf(outfile, "move $fp, $sp\n");
 			fprintf(outfile, "addi $sp, $sp, -4\n");
 
 			fprintf(outfile, "jal %s\n", node->value);
-			
+
 			fprintf(outfile, "move $sp, $fp\n");
 			fprintf(outfile, "lw $fp, 0($sp)\n");
 			
 			fprintf(outfile, "addi $sp, $sp, 4\n");
-			fprintf(outfile, "lw $ra, 0($sp)\n");
-
+			fprintf(outfile, "lw $9, 0($sp)\n");
+			fprintf(outfile, "addi $sp, $sp, 4\n");
+			fprintf(outfile, "lw $8, 0($sp)\n");
 			
+			fprintf(outfile, "addi $sp, $sp, 4\n");
+			fprintf(outfile, "lw $ra, 0($sp)\n");
+	
 			if (truelabel == 0 && falselabel != 0)
 				fprintf(outfile, "beqz $v0 label%d\n", falselabel);
 			if (truelabel != 0 && falselabel == 0)
@@ -834,9 +844,6 @@ int translateCon(Tree_Node *node, int truelabel, int falselabel) {
 				fprintf(outfile, "j label%d\n", falselabel);	
 			}
 			
-			fprintf(outfile, "addi $sp, $sp, 4\n");
-			fprintf(outfile, "lw $v0, 0($sp)\n");
-
 			if (varsize > 0)
 				fprintf(outfile, "addi $sp, $sp, %d\n", varsize);
 		}
