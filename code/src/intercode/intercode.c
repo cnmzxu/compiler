@@ -9,15 +9,11 @@
 
 FILE *outfile;
 int labelnum, tempvarnum;
+int nowoffset;
 
 int getlabel() {
 	labelnum++;
 	return labelnum;
-}
-
-int gettempvar() {
-	tempvarnum++;
-	return tempvarnum;
 }
 
 typedef struct {
@@ -31,12 +27,36 @@ int translateDefList(Tree_Node *node);
 int translateStmtList(Tree_Node *node, int label);
 int translateStmt(Tree_Node *node, int label);
 expans analysisExp(Tree_Node *node);
-symbol_type *translateExp(Tree_Node *node, int flag, char *dest);// flag = 0 : value, flag = 1 : address
+symbol_type *translateExp(Tree_Node *node, int flag, int destreg);// flag = 0 : value, flag = 1 : address
 int translateCon(Tree_Node *node, int truelabel, int falselabel2);
 
 
 int translate(Tree_Node *node) {
-	outfile = fopen("./translation.ir", "w+");
+	outfile = fopen("./out.s", "w+");
+
+	fprintf(outfile, ".data\n");
+	fprintf(outfile, "_promopt: .asciiz \"Enter an integer:\"\n");
+	fprintf(outfile, "_ret: .asciiz \"\\n\"\n");
+	fprintf(outfile, ".globl main\n");
+	fprintf(outfile, ".text\n");
+	fprintf(outfile, "read:\n");
+	fprintf(outfile, "li $v0, 4\n");
+	fprintf(outfile, "la $a0, _promopt\n");
+	fprintf(outfile, "syscall\n");
+	fprintf(outfile, "li $v0, 5\n");
+	fprintf(outfile, "syscall\n");
+	fprintf(outfile, "jr $ra\n");
+	fprintf(outfile, "\n");
+	fprintf(outfile, "write:\n");
+	fprintf(outfile, "li $v0, 1\n");
+	fprintf(outfile, "syscall\n");
+	fprintf(outfile, "li $v0, 4\n");
+	fprintf(outfile, "la $a0, _ret\n");
+	fprintf(outfile, "syscall\n");
+	fprintf(outfile, "move $v0, $0\n");
+	fprintf(outfile, "jr $ra\n");
+	fprintf(outfile, "\n");
+
 	translateExtDefList(node->child);
 	return 0;
 }
@@ -50,7 +70,6 @@ int translateExtDefList(Tree_Node *node) {
 			translateExtDefList(node->sibling);
 		}
 	}
-
 	return 0;
 }
 
@@ -60,38 +79,15 @@ int translateExtDef(Tree_Node *extdef) {
 	symbol_type *type = get_type(extdef);
 	extdef = extdef->sibling;
 	
-	if (strcmp(extdef->type, "ExtDecList") == 0) {
-		void translateVarDec(Tree_Node *vardec, symbol_type *ttype) {
-			while(1) {
-				vardec = vardec->child;
-				if (strcmp(vardec->type, "ID") == 0)
-					break;
-				symbol_type *new_type = (symbol_type *)malloc(sizeof(symbol_type));
-				new_type->type = TYPE_ARRAY;
-				new_type->array_field.subtype = ttype;
-				new_type->array_field.length = atoi(vardec->sibling->sibling->value);
-				new_type->size = ttype->size * new_type->array_field.length;
-				ttype = new_type;
-			}
-			if (ttype->type == TYPE_STRUCT || ttype->type == TYPE_ARRAY)
-				fprintf(outfile, "DEC %s %d\n", vardec->value, ttype->size);
-			add_symbol_entry(vardec->value, ttype, vardec->lineno, VARIABLE_TABLE, 1);
-		}
-		Tree_Node *vardec = extdef->child;
-		while(1) {
-			translateVarDec(vardec, type);
-			vardec = vardec->sibling;
-			if (vardec == NULL)
-				break;
-			vardec = vardec->sibling;
-		}
-	}
-	else if (strcmp(extdef->type, "FunDec") == 0) {
+	if (strcmp(extdef->type, "FunDec") == 0) {
 		symbol_type *functype = (symbol_type *)malloc(sizeof(symbol_type));
 		functype->function_field.return_type = type;
 		functype->function_field.variable_length = 0;
 		symbol_table_entry *variable = (symbol_table_entry *)malloc(sizeof(symbol_table_entry) * 20);
+
 		void translateVarDec(Tree_Node *vardec, symbol_type *ttype) {
+			int tlength = 0;
+			
 			while(1) {
 				vardec = vardec->child;
 				if (strcmp(vardec->type, "ID") == 0)
@@ -103,19 +99,26 @@ int translateExtDef(Tree_Node *extdef) {
 				new_type->size = ttype->size * new_type->array_field.length;
 				ttype = new_type;
 			}
-			add_symbol_entry(vardec->value, ttype, vardec->lineno, VARIABLE_TABLE, 2);
-			strcpy(variable[functype->function_field.variable_length].name, vardec->value);
-			variable[functype->function_field.variable_length].type = ttype;
-			functype->function_field.variable_length += 1;
-			fprintf(outfile, "PARAM %s\n", vardec->value);
+			tlength = functype->function_field.variable_length;
+			strcpy(variable[tlength].name, vardec->value);
+			variable[tlength].type = ttype;
+			tlength++;
+			functype->function_field.variable_length = tlength;
+			
+			add_variable_symbol_entry(vardec->value, ttype, vardec->lineno, 2, -4 * (tlength + 3));
 		}
+
 		functype->function_field.variable = variable;
 		Tree_Node *fundec = extdef->child;
-		fprintf(outfile, "FUNCTION %s :\n", fundec->value);
-		add_symbol_entry(fundec->value, functype, fundec->lineno, FUNCTION_TABLE, 1);
+		fprintf(outfile, "%s:\n", fundec->value);
+		if (strcmp(fundec->value, "main") == 0)
+			fprintf(outfile, "move $fp, $sp\n");
+		add_function_symbol_entry(fundec->value, functype, fundec->lineno, 1);
 		fundec = fundec->sibling->sibling;
 		Tree_Node *temp;
 		creat_new_scope();
+		nowoffset = 4;
+		
 		if (strcmp(fundec->type, "VarList") == 0){
 			while(1) {
 				fundec = fundec->child;
@@ -127,9 +130,11 @@ int translateExtDef(Tree_Node *extdef) {
 				fundec = fundec->sibling;
 			}
 		}
+		
 		extdef = extdef->sibling->child->sibling;
 		translateDefList(extdef);
 		translateStmtList(extdef->sibling, 0);
+		fprintf(outfile, "\n");
 		delete_local_scope();
 	}
 }
@@ -142,6 +147,7 @@ int translateDefList(Tree_Node *deflist) {
 	deflist = def->sibling;
 	def = def->child;
 	symbol_type *type = get_type(def);
+
 	void translateVarDec(Tree_Node *vardec, symbol_type *ttype) {
 		Tree_Node *id = vardec->child;
 		while(1) {
@@ -155,16 +161,23 @@ int translateDefList(Tree_Node *deflist) {
 			ttype = new_type;
 			id = id->child;
 		}
-		if (ttype->type == TYPE_STRUCT || ttype->type == TYPE_ARRAY)
-			fprintf(outfile, "DEC %s %d\n", id->value, ttype->size);
-		add_symbol_entry(id->value, ttype, id->lineno, VARIABLE_TABLE, 1);
+
+		add_variable_symbol_entry(id->value, ttype, id->lineno, 1, nowoffset);
+		fprintf(outfile, "addi $sp, $sp, %d\n", -ttype->size);
 		if (vardec->sibling != NULL) {
 			expans ans = analysisExp(vardec->sibling->sibling);
-			if (ans.flag == 1)
-				fprintf(outfile, "%s := #%d\n", id->value, ans.ans);
-			else
-				translateExp(vardec->sibling->sibling, 0, id->value);
+			if (ans.flag == 1) {
+				fprintf(outfile, "li $8, %d\n", ans.ans);
+				fprintf(outfile, "sw $8, %d($fp)\n", -nowoffset);
+			}
+				//fprintf(outfile, "%s := #%d\n", id->value, ans.ans);
+			else {
+				translateExp(vardec->sibling->sibling, 0, nowoffset);
+			}
+				//translateExp(vardec->sibling->sibling, 0, id->value);
 		}
+		nowoffset += ttype->size;
+
 	}
 	
 	def = def->sibling;
@@ -187,7 +200,7 @@ int translateStmtList(Tree_Node *stmtlist, int label) {
 	while (1) {
 		if (strcmp(stmtlist->type, "empty") == 0){
 			if (label != 0) {
-				fprintf(outfile, "GOTO label%d\n", label);
+				fprintf(outfile, "j label%d\n", label);
 			}
 			break;
 		}
@@ -202,9 +215,9 @@ int translateStmt(Tree_Node *stmt, int label) {
 	//printf("stmt\n");
 	stmt = stmt->child;
 	if (strcmp(stmt->type, "Exp") == 0) {
-		translateExp(stmt, 0, NULL);
+		translateExp(stmt, 0, -100);
 		if (label != 0)
-			fprintf(outfile, "GOTO label%d\n", label);
+			fprintf(outfile, "j label%d\n", label);
 	}
 	else if (strcmp(stmt->type, "CompSt") == 0) {
 		stmt = stmt->child->sibling;
@@ -214,20 +227,12 @@ int translateStmt(Tree_Node *stmt, int label) {
 	else if (strcmp(stmt->type, "RETURN") == 0) {
 		stmt = stmt->sibling;
 		expans ans = analysisExp(stmt);
-		if (ans.flag == 1)
-			fprintf(outfile, "RETURN #%d\n", ans.ans);
+		if (ans.flag == 1) 
+			fprintf(outfile, "li $v0, %d\n", ans.ans);	
 		else {
-			Tree_Node *id = stmt->child;
-			char str[20];
-			if (ans.flag == 2)
-				strcpy(str, id->value);
-			else {
-				int tempvar = gettempvar();
-				sprintf(str, "v%d", tempvar);
-				translateExp(stmt, 0, str);
-			}
-			fprintf(outfile, "RETURN %s\n", str);
+			translateExp(stmt, 0, -2);
 		}
+		fprintf(outfile, "jr $ra\n");
 	}
 	else if (strcmp(stmt->type, "IF") == 0) {
 		Tree_Node *exp = stmt->sibling->sibling;
@@ -241,7 +246,7 @@ int translateStmt(Tree_Node *stmt, int label) {
 					translateStmt(stmt1, label);
 				else {
 					if (label != 0)
-						fprintf(outfile, "GOTO label%d\n", label);
+						fprintf(outfile, "j label%d\n", label);
 				}
 				return 0;
 			}
@@ -254,7 +259,7 @@ int translateStmt(Tree_Node *stmt, int label) {
 				translateCon(exp, 0, newlabel);
 				translateStmt(stmt1, label);
 				if (label == 0)
-					fprintf(outfile, "LABEL label%d :\n", newlabel);
+					fprintf(outfile, "label%d:\n", newlabel);
 			}
 		}
 		else {
@@ -275,10 +280,10 @@ int translateStmt(Tree_Node *stmt, int label) {
 					newlabel2 = label;
 				translateCon(exp, 0, newlabel1);
 				translateStmt(stmt1, newlabel2);
-				fprintf(outfile, "LABEL label%d :\n", newlabel1);
+				fprintf(outfile, "label%d:\n", newlabel1);
 				translateStmt(stmt2, label);
 				if (label == 0)
-					fprintf(outfile, "LABEL label%d :\n", newlabel2);
+					fprintf(outfile, "label%d:\n", newlabel2);
 			}
 		}
 	}
@@ -291,10 +296,10 @@ int translateStmt(Tree_Node *stmt, int label) {
 			newlabel2 = getlabel();
 		else
 			newlabel2 = label;
-		fprintf(outfile, "LABEL label%d :\n", newlabel1);
+		fprintf(outfile, "label%d:\n", newlabel1);
 		translateCon(exp, 0, newlabel2);
 		translateStmt(stmt, newlabel1);
-		fprintf(outfile, "LABEL label%d :\n", newlabel2);
+		fprintf(outfile, "label%d:\n", newlabel2);
 	}
 }
 
@@ -323,10 +328,6 @@ expans analysisExp(Tree_Node *node) {
 			return ans;
 		else if (strcmp(node2->type, "LB") == 0) 
 			return ans;
-		
-		else if (strcmp(node2->type, "DOT") == 0) 
-			return ans;			
-	
 		else if (strcmp(node2->type, "AND") == 0) {	
 			expans ans1 = analysisExp(node1),
 				   ans2 = analysisExp(node3);
@@ -446,80 +447,124 @@ expans analysisExp(Tree_Node *node) {
 int translateCon(Tree_Node *node, int truelabel, int falselabel) {
 	//printf("con\n");
 	node = node->child;
-	if (truelabel == falselabel && truelabel != 0)
-		fprintf(outfile, "GOTO label%d\n", truelabel);
-	if (truelabel == 0 && falselabel != 0) {
-		if (strcmp(node->type, "Exp") == 0) {
-			Tree_Node *node2 = node->sibling;
-			Tree_Node *node3 = node2->sibling;
-			if (strcmp(node2->type, "LB") == 0) {
-				int tempvar1 = gettempvar(),
-					tempvar4 = gettempvar();
-				expans ans = analysisExp(node3);
-				char dest1[20];
-				sprintf(dest1, "v%d", tempvar1);
-				translateExp(node, 1, dest1);
-				if (ans.flag == 0) {
-					int tempvar2 = gettempvar(),
-						tempvar3 = gettempvar();
-					char dest2[20];
-					sprintf(dest2, "v%d", tempvar2);
-					translateExp(node3, 0, dest2);
-					fprintf(outfile, "v%d := v%d * #4\n", tempvar3, tempvar2);
-					fprintf(outfile, "v%d := v%d + v%d\n", tempvar4, tempvar1, tempvar3);
+	if (truelabel == falselabel && truelabel != 0) {
+		fprintf(outfile, "j label%d\n", truelabel);
+		return 0;
+	}
+
+	if (strcmp(node->type, "Exp") == 0) {
+		Tree_Node *node2 = node->sibling;
+		Tree_Node *node3 = node2->sibling;
+		if (strcmp(node2->type, "LB") == 0) {
+			int i, varaddr = 0;
+			for (i = 0; i < variable_symbol_table.top; i++)
+				if (variable_symbol_table.existence[i] > 0 && strcmp(variable_symbol_table.table[i]->name, node->child->value) == 0) {
+					varaddr = variable_symbol_table.table[i]->offset;
+					break;
 				}
-				else
-					fprintf(outfile, "v%d := v%d + #%d\n", tempvar4, tempvar1, 4 * ans.ans);
-				fprintf(outfile, "IF *v%d == #0 GOTO label%d\n", tempvar4, falselabel);
+			expans ans = analysisExp(node3);
+			if (ans.flag != 1) {
+				translateExp(node3, 0, -8);
+				fprintf(outfile, "sll $8, $8, 2\n");
+				fprintf(outfile, "neg $8, $8\n");
+				fprintf(outfile, "la %d($8)\n", -varaddr);
+				fprintf(outfile, "add $8, $8, $fp\n");
+				fprintf(outfile, "lw $8, 0($8)\n");
 			}
-			else if (strcmp(node2->type, "DOT") == 0) {
-				int tempvar = gettempvar(),
-					tempvar2 = gettempvar();
-				char dest1[20];
-				sprintf(dest1, "v%d", tempvar);
-				symbol_type *type = translateExp(node, 1, dest1);
-				int size = 0, i = 0;
-				for (i = 0; i < type->struct_field.table_length; i++) {
-					if (strcmp(type->struct_field.field_table[i].name, node3->value) == 0) {
-						fprintf(outfile, "v%d := v%d + #%d\n", tempvar2, tempvar, size);
-						break;
-					}
-					size += type->struct_field.field_table[i].type->size;
+			else {
+				fprintf(outfile, "lw $8, %d($fp)\n", -(4 * ans.ans + varaddr));
+			}
+			if (truelabel == 0 && falselabel != 0)
+				fprintf(outfile, "beqz $8, label%d\n", falselabel);
+			else if (truelabel != 0 && falselabel == 0)
+				fprintf(outfile, "bnez $8, label%d\n", truelabel);
+			else if (truelabel != 0 && falselabel != 0) {
+				fprintf(outfile, "bnez $8, label%d\n", truelabel);
+				fprintf(outfile, "j label%d\n", falselabel);
+			}
+					
+		}
+		else if (strcmp(node2->type, "AND") == 0) {
+			expans ans1 = analysisExp(node),
+				   ans2 = analysisExp(node3);
+			if (truelabel == 0 && falselabel != 0) {
+				if (ans1.flag != 1 && ans2.flag != 1){
+					translateCon(node, 0, falselabel);
+					translateCon(node3, 0, falselabel);
 				}
-				fprintf(outfile, "IF *v%d == #0 GOTO label%d\n", tempvar2, falselabel);
+				else if (ans1.flag == 1 && ans2.flag != 1) {
+					if (ans1.ans == 0)
+						fprintf(outfile, "j label%d\n", falselabel);
+					else
+						translateCon(node3, 0, falselabel);
+				}
+				else if (ans1.flag != 1 && ans2.flag == 1) {
+					if (ans2.ans == 0)
+						fprintf(outfile, "j label%d\n", falselabel);
+					else
+						translateCon(node, 0, falselabel);
+				}
+				else {
+					if (ans1.ans == 0 || ans2.ans == 0)	
+						fprintf(outfile, "j label%d\n", falselabel);
+				}
 			}
-			else if (strcmp(node2->type, "AND") == 0) {
-				expans ans1 = analysisExp(node),
-					   ans2 = analysisExp(node3);
+			else if (truelabel != 0 && falselabel == 0) {
+				if (ans1.flag != 1 && ans2.flag != 1){
+					int newlabel = getlabel();
+					translateCon(node, 0, newlabel);
+					translateCon(node3, truelabel, 0);
+					fprintf(outfile, "label%d:\n", newlabel);
+				}
+				else if (ans1.flag == 1 && ans2.flag != 1) {
+					if (ans1.ans != 0)
+						translateCon(node3, truelabel, 0);
+				}
+				else if (ans1.flag != 1 && ans2.flag == 1) {
+					if (ans2.ans != 0)
+						translateCon(node, truelabel, 0);
+				}
+				else {
+					if (ans1.ans != 0 && ans2.ans != 0)	
+						fprintf(outfile, "j label%d\n", truelabel);
+				}
+
+			}
+			else if (truelabel != 0 && falselabel != 0) {
 				if (ans1.flag != 1 && ans2.flag != 1){
 					translateCon(node, 0, falselabel);
 					translateCon(node3, truelabel, falselabel);
 				}
 				else if (ans1.flag == 1 && ans2.flag != 1) {
 					if (ans1.ans == 0)
-						fprintf(outfile, "GOTO label%d\n", falselabel);
+						fprintf(outfile, "j label%d\n", falselabel);
 					else
 						translateCon(node3, truelabel, falselabel);
 				}
 				else if (ans1.flag != 1 && ans2.flag == 1) {
 					if (ans2.ans == 0)
-						fprintf(outfile, "GOTO label%d\n", falselabel);
+						fprintf(outfile, "j label%d\n", falselabel);
 					else
 						translateCon(node, truelabel, falselabel);
 				}
 				else {
 					if (ans1.ans == 0 || ans2.ans == 0)	
-						fprintf(outfile, "GOTO label%d\n", falselabel);
+						fprintf(outfile, "j label%d\n", falselabel);
+					else
+						fprintf(outfile, "j label%d\n", truelabel);
 				}
-			}
-			else if (strcmp(node2->type, "OR") == 0) {
+
+			}	
+		}
+		else if (strcmp(node2->type, "OR") == 0) {
 				expans ans1 = analysisExp(node),
 					   ans2 = analysisExp(node3);
+			if (truelabel == 0 && falselabel != 0) {	
 				if (ans1.flag != 1 && ans2.flag != 1){
 					int newlabel = getlabel();
 					translateCon(node, newlabel, 0);
 					translateCon(node3, truelabel, falselabel);
-					fprintf(outfile, "LABEL label%d :\n", newlabel);
+					fprintf(outfile, "label%d:\n", newlabel);
 				}
 				else if (ans1.flag == 1 && ans2.flag != 1) {
 					if (ans1.ans == 0)
@@ -531,13 +576,64 @@ int translateCon(Tree_Node *node, int truelabel, int falselabel) {
 				}
 				else {
 					if (ans1.ans == 0 && ans2.ans == 0)	
-						fprintf(outfile, "GOTO label%d\n", falselabel);
+						fprintf(outfile, "j label%d\n", falselabel);
 				}
 
 			}
-			else if (strcmp(node2->type, "RELOP") == 0) {
-				expans ans1 = analysisExp(node),
-					   ans2 = analysisExp(node3);
+			if (truelabel != 0 && falselabel == 0) {	
+				if (ans1.flag != 1 && ans2.flag != 1){
+					translateCon(node, truelabel, 0);
+					translateCon(node3, truelabel, falselabel);
+				}
+				else if (ans1.flag == 1 && ans2.flag != 1) {
+					if (ans1.ans != 0)
+						fprintf(outfile, "j label%d\n", truelabel);
+					else
+						translateCon(node3, truelabel, falselabel);
+				}
+				else if (ans1.flag != 1 && ans2.flag == 1) {
+					if (ans2.ans != 0)
+						fprintf(outfile, "j label%d\n", truelabel);
+					else
+						translateCon(node, truelabel, falselabel);
+				}
+				else {
+					if (ans1.ans != 0 || ans2.ans != 0)	
+						fprintf(outfile, "j label%d\n", truelabel);
+				}
+
+			}
+			if (truelabel != 0 && falselabel != 0) {	
+				if (ans1.flag != 1 && ans2.flag != 1){
+					int newlabel = getlabel();
+					translateCon(node, truelabel, 0);
+					translateCon(node3, truelabel, falselabel);
+				}
+				else if (ans1.flag == 1 && ans2.flag != 1) {
+					if (ans1.ans == 0)
+						translateCon(node3, truelabel, falselabel);
+					else
+						fprintf(outfile, "j label%d\n", truelabel);
+				}
+				else if (ans1.flag != 1 && ans2.flag == 1) {
+					if (ans2.ans == 0)
+						translateCon(node, truelabel, falselabel);
+					else
+						fprintf(outfile, "j label%d\n", truelabel);
+				}
+				else {
+					if (ans1.ans == 0 && ans2.ans == 0)	
+						fprintf(outfile, "j label%d\n", falselabel);
+					else
+						fprintf(outfile, "j label%d\n", truelabel);
+				}
+
+			}
+		}
+		else if (strcmp(node2->type, "RELOP") == 0) {
+			expans ans1 = analysisExp(node),
+				   ans2 = analysisExp(node3);
+			if (truelabel == 0 && falselabel != 0) {
 				if (ans1.flag == 1 && ans2.flag == 1) {
 					if ((strcmp(node2->value, ">=") == 0 && ans1.ans < ans2.ans)
 					|| (strcmp(node2->value, ">") == 0 && ans1.ans <= ans2.ans)
@@ -545,243 +641,60 @@ int translateCon(Tree_Node *node, int truelabel, int falselabel) {
 					|| (strcmp(node2->value, "<") == 0 && ans1.ans >= ans2.ans)
 					|| (strcmp(node2->value, "==") == 0 && ans1.ans != ans2.ans)
 					|| (strcmp(node2->value, "!=") == 0 && ans1.ans == ans2.ans))
-						fprintf(outfile, "GOTO label%d\n", falselabel);
+						fprintf(outfile, "j label%d\n", falselabel);
 				}
 				else if (ans1.flag != 1 && ans2.flag == 1) {
-					Tree_Node *id = node->child;
-					char str[20];
-					if (ans1.flag == 2)
-						strcpy(str, id->value);
-					else {
-						int tempvar = gettempvar();
-						sprintf(str, "v%d", tempvar);
-						translateExp(node, 0, str);
-					}
+					translateExp(node, 0, -8);
+					fprintf(outfile, "li $9, %d\n", ans2.ans);
 					if (strcmp(node2->value, ">=") == 0)
-						fprintf(outfile, "IF %s < #%d GOTO label%d\n", str, ans2.ans, falselabel);
+						fprintf(outfile, "blt $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, ">") == 0)
-						fprintf(outfile, "IF %s <= #%d GOTO label%d\n", str, ans2.ans, falselabel);
+						fprintf(outfile, "ble $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "<=") == 0)
-						fprintf(outfile, "IF %s > #%d GOTO label%d\n", str, ans2.ans, falselabel);
+						fprintf(outfile, "bgt $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "<") == 0)
-						fprintf(outfile, "IF %s >= #%d GOTO label%d\n", str, ans2.ans, falselabel);
+						fprintf(outfile, "bge $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "==") == 0)
-						fprintf(outfile, "IF %s != #%d GOTO label%d\n", str, ans2.ans, falselabel);
+						fprintf(outfile, "bne $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "!=") == 0)
-						fprintf(outfile, "IF %s == #%d GOTO label%d\n", str, ans2.ans, falselabel);
+						fprintf(outfile, "beq $8, $9, label%d\n", falselabel);
 				}
 				else if (ans1.flag == 1 && ans2.flag != 1) {
-					Tree_Node *id = node3->child;
-					char str[20];
-					if (ans2.flag == 2)
-						strcpy(str, id->value);
-					else {
-						int tempvar = gettempvar();
-						sprintf(str, "v%d", tempvar);
-						translateExp(node3, 0, str);
-					}
+					translateExp(node3, 0, -8);
+					fprintf(outfile, "li $9, %d\n", ans1.ans);
 					if (strcmp(node2->value, ">=") == 0)
-						fprintf(outfile, "IF %s > #%d GOTO label%d\n", str, ans1.ans, falselabel);
+						fprintf(outfile, "bgt $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, ">") == 0)
-						fprintf(outfile, "IF %s >= #%d GOTO label%d\n", str, ans1.ans, falselabel);
+						fprintf(outfile, "bge $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "<=") == 0)
-						fprintf(outfile, "IF %s < #%d GOTO label%d\n", str, ans1.ans, falselabel);
+						fprintf(outfile, "blt $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "<") == 0)
-						fprintf(outfile, "IF %s <= #%d GOTO label%d\n", str, ans1.ans, falselabel);
+						fprintf(outfile, "ble $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "==") == 0)
-						fprintf(outfile, "IF %s != #%d GOTO label%d\n", str, ans1.ans, falselabel);
+						fprintf(outfile, "bne $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "!=") == 0)
-						fprintf(outfile, "IF %s == #%d GOTO label%d\n", str, ans1.ans, falselabel);
+						fprintf(outfile, "beq $8, $9, label%d\n", falselabel);
 				}
 				else {
-					Tree_Node *id1 = node->child;
-					char str1[20];
-					if (strcmp(id1->type, "ID") == 0 && id1->sibling == NULL)
-						strcpy(str1, id1->value);
-					else {
-						int tempvar1 = gettempvar();
-						sprintf(str1, "v%d", tempvar1);
-						translateExp(node, 0, str1);
-					}
-					Tree_Node *id2 = node3->child;
-					char str2[20];
-					if (strcmp(id2->type, "ID") == 0 && id2->sibling == NULL)
-						strcpy(str2, id2->value);
-					else {
-						int tempvar2 = gettempvar();
-						sprintf(str2, "v%d", tempvar2);
-						translateExp(node3, 0, str2);
-					}
+					translateExp(node, 0, -8);
+					translateExp(node3, 0, -9);
+					
 					if (strcmp(node2->value, ">=") == 0)
-						fprintf(outfile, "IF %s < %s GOTO label%d\n", str1, str2, falselabel);
+						fprintf(outfile, "blt $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, ">") == 0)
-						fprintf(outfile, "IF %s <= %s GOTO label%d\n", str1, str2, falselabel);
+						fprintf(outfile, "ble $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "<=") == 0)
-						fprintf(outfile, "IF %s > %s GOTO label%d\n", str1, str2, falselabel);
+						fprintf(outfile, "bgt $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "<") == 0)
-						fprintf(outfile, "IF %s >= %s GOTO label%d\n", str1, str2, falselabel);
+						fprintf(outfile, "bge $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "==") == 0)
-						fprintf(outfile, "IF %s != %s GOTO label%d\n", str1, str2, falselabel);
+						fprintf(outfile, "bne $8, $9, label%d\n", falselabel);
 					else if (strcmp(node2->value, "!=") == 0)
-						fprintf(outfile, "IF %s == %s GOTO label%d\n", str1, str2, falselabel);				
+						fprintf(outfile, "beq $8, $9, label%d\n", falselabel);
+		
 				}
 			}
-		}
-		else if (strcmp(node->type, "ID") == 0) {
-			Tree_Node *node2 = node->sibling;
-			if (node2 == NULL)
-				fprintf(outfile, "IF %s == #0 GOTO label%d\n", node->value, falselabel);
-			else {
-				node2 = node2->sibling;
-				int tempvar1 = gettempvar();
-				if (strcmp(node2->type, "Args") == 0) {
-					void analysisArgs(Tree_Node *args) {
-						args = args->child;
-						if (args->sibling != NULL)
-							analysisArgs(args->sibling->sibling);
-						expans ans = analysisExp(args);
-						if (ans.flag == 1)
-							fprintf(outfile, "ARG #%d\n", ans.ans);
-						else {
-							Tree_Node *id = args->child;
-							char str[20];
-							if (ans.flag == 2)
-								strcpy(str, id->value);
-							else {
-								int tempvar2 = gettempvar();
-								sprintf(str, "v%d", tempvar2);
-								translateExp(args, 0, str);
-							}
-							fprintf(outfile, "ARG %s\n", str);
-						}
-					}
-					analysisArgs(node2);
-					fprintf(outfile, "v%d := CALL %s\n", tempvar1, node->value);
-				}
-				else {
-					if (strcmp(node->value, "read") == 0)
-						fprintf(outfile, "READ v%d\n", tempvar1);
-					else
-						fprintf(outfile, "v%d := CALL %s\n", tempvar1, node->value);
-				}
-				fprintf(outfile, "IF v%d == #0 GOTO label%d\n", tempvar1, falselabel);
-			}
-		}
-		else if (strcmp(node->type, "LP") == 0) {
-			Tree_Node *node2 = node->sibling;
-			expans ans = analysisExp(node2);
-			if (ans.flag == 1) {
-				if (ans.ans == 0)
-					fprintf(outfile, "GOTO label%d\n", falselabel);
-			}
-			else
-				translateCon(node2, truelabel, falselabel);
-		}
-		else if (strcmp(node->type, "NOT") == 0) {
-			expans ans = analysisExp(node->sibling);
-			if (ans.flag == 1) {
-				if (ans.ans != 0)
-					fprintf(outfile, "GOTO label%d\n", falselabel);
-			}
-			else
-				translateCon(node->sibling, falselabel, truelabel);
-		}
-		else if (strcmp(node->type, "INT") == 0) {
-			int num = atoi(node->value);
-			if (num == 0)
-				fprintf(outfile, "GOTO label%d\n", falselabel);
-		}
-	}
-	else if (falselabel == 0 && truelabel != 0) {	
-		if (strcmp(node->type, "Exp") == 0) {
-			Tree_Node *node2 = node->sibling;
-			Tree_Node *node3 = node2->sibling;
-			if (strcmp(node2->type, "LB") == 0) {
-				int tempvar1 = gettempvar(), 
-					tempvar4 = gettempvar();
-				expans ans = analysisExp(node3);
-				char dest1[20];
-				sprintf(dest1, "v%d", tempvar1);
-				translateExp(node, 1, dest1);
-				if (ans.flag == 0) {
-					int tempvar2 = gettempvar(),
-						tempvar3 = gettempvar();
-					char dest2[20];
-					sprintf(dest2, "v%d", tempvar2);
-					translateExp(node3, 0, dest2);
-					fprintf(outfile, "v%d := v%d * #4\n", tempvar3, tempvar2);
-					fprintf(outfile, "v%d := v%d + v%d\n", tempvar4, tempvar1, tempvar3);
-				}
-				else
-					fprintf(outfile, "v%d := v%d + #%d\n", tempvar4, tempvar1, 4 * ans.ans);
-				fprintf(outfile, "IF *v%d != #0 GOTO label%d\n", tempvar4, truelabel);
-			}
-			else if (strcmp(node2->type, "DOT") == 0) {
-				int tempvar = gettempvar(),
-					tempvar2 = gettempvar();
-				char dest1[20];
-				sprintf(dest1, "v%d", tempvar);
-				symbol_type *type = translateExp(node, 1, dest1);
-				int size = 0, i = 0;
-				for (i = 0; i < type->struct_field.table_length; i++) {
-					if (strcmp(type->struct_field.field_table[i].name, node3->value) == 0) {
-						fprintf(outfile, "v%d := v%d + #%d\n", tempvar2, tempvar, size);
-						break;
-					}
-					size += type->struct_field.field_table[i].type->size;
-				}
-				fprintf(outfile, "IF *v%d != #0 GOTO label%d\n", tempvar2, falselabel);
-			}
-			else if (strcmp(node2->type, "OR") == 0) {
-				expans ans1 = analysisExp(node),
-					   ans2 = analysisExp(node3);
-				if (ans1.flag != 1 && ans2.flag != 1){
-					translateCon(node, truelabel, 0);
-					translateCon(node3, truelabel, falselabel);
-				}
-				else if (ans1.flag == 1 && ans2.flag != 1) {
-					if (ans1.ans != 0)
-						fprintf(outfile, "GOTO label%d\n", truelabel);
-					else
-						translateCon(node3, truelabel, falselabel);
-				}
-				else if (ans1.flag != 1 && ans2.flag == 1) {
-					if (ans2.ans != 0)
-						fprintf(outfile, "GOTO label%d\n", truelabel);
-					else
-						translateCon(node, truelabel, falselabel);
-				}
-				else {
-					if (ans1.ans != 0 || ans2.ans != 0)	
-						fprintf(outfile, "GOTO label%d\n", truelabel);
-				}
-			}
-			else if (strcmp(node2->type, "AND") == 0) {
-				expans ans1 = analysisExp(node),
-					   ans2 = analysisExp(node3);
-				if (ans1.flag != 1 && ans2.flag != 1){
-					int newlabel = getlabel();
-					translateCon(node, 0, newlabel);
-					translateCon(node3, truelabel, falselabel);
-					fprintf(outfile, "LABEL label%d :\n", newlabel);
-				}
-				else if (ans1.flag == 1 && ans2.flag != 1) {
-					if (ans1.ans != 0)
-						translateCon(node3, truelabel, falselabel);
-				}
-				else if (ans1.flag != 1 && ans2.flag == 1) {
-					if (ans2.ans != 0)
-						translateCon(node, truelabel, falselabel);
-				}
-				else {
-					if (ans1.ans != 0 && ans2.ans == 0)	
-						fprintf(outfile, "GOTO label%d\n", falselabel);
-				}
-
-			}
-			else if (strcmp(node2->type, "RELOP") == 0) {
-				expans ans1 = analysisExp(node),
-					   ans2 = analysisExp(node3);
+			if (truelabel != 0) {
 				if (ans1.flag == 1 && ans2.flag == 1) {
 					if ((strcmp(node2->value, ">=") == 0 && ans1.ans >= ans2.ans)
 					|| (strcmp(node2->value, ">") == 0 && ans1.ans > ans2.ans)
@@ -789,426 +702,200 @@ int translateCon(Tree_Node *node, int truelabel, int falselabel) {
 					|| (strcmp(node2->value, "<") == 0 && ans1.ans < ans2.ans)
 					|| (strcmp(node2->value, "==") == 0 && ans1.ans == ans2.ans)
 					|| (strcmp(node2->value, "!=") == 0 && ans1.ans != ans2.ans))
-						fprintf(outfile, "GOTO label%d\n", truelabel);
+						fprintf(outfile, "j label%d\n", truelabel);
+					else if (falselabel != 0)
+						fprintf(outfile, "j label%d\n", falselabel);	
 				}
 				else if (ans1.flag != 1 && ans2.flag == 1) {
-					Tree_Node *id = node->child;
-					char str[20];
-					if (ans1.flag == 2)
-						strcpy(str, id->value);
-					else {
-						int tempvar = gettempvar();
-						sprintf(str, "v%d", tempvar);
-						translateExp(node, 0, str);
-					}
+					translateExp(node, 0, -8);
+					fprintf(outfile, "li $9, %d\n", ans2.ans);
 					if (strcmp(node2->value, ">=") == 0)
-						fprintf(outfile, "IF %s >= #%d GOTO label%d\n", str, ans2.ans, truelabel);
+						fprintf(outfile, "bge $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, ">") == 0)
-						fprintf(outfile, "IF %s > #%d GOTO label%d\n", str, ans2.ans, truelabel);
+						fprintf(outfile, "bgt $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "<=") == 0)
-						fprintf(outfile, "IF %s <= #%d GOTO label%d\n", str, ans2.ans, truelabel);
+						fprintf(outfile, "ble $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "<") == 0)
-						fprintf(outfile, "IF %s < #%d GOTO label%d\n", str, ans2.ans, truelabel);
+						fprintf(outfile, "blt $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "==") == 0)
-						fprintf(outfile, "IF %s == #%d GOTO label%d\n", str, ans2.ans, truelabel);
+						fprintf(outfile, "beq $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "!=") == 0)
-						fprintf(outfile, "IF %s != #%d GOTO label%d\n", str, ans2.ans, truelabel);
+						fprintf(outfile, "bne $8, $9, label%d\n", truelabel);
+					if (falselabel != 0)
+						fprintf(outfile, "j label%d\n", falselabel);		
 				}
 				else if (ans1.flag == 1 && ans2.flag != 1) {
-					Tree_Node *id = node3->child;
-					char str[20];
-					if (ans2.flag == 2)
-						strcpy(str, id->value);
-					else {
-						int tempvar = gettempvar();
-						sprintf(str, "v%d", tempvar);
-						translateExp(node, 0, str);
-					}
+					translateExp(node3, 0, -8);
+					fprintf(outfile, "li $9, %d\n", ans1.ans);
 					if (strcmp(node2->value, ">=") == 0)
-						fprintf(outfile, "IF %s <= #%d GOTO label%d\n", str, ans1.ans, truelabel);
+						fprintf(outfile, "ble $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, ">") == 0)
-						fprintf(outfile, "IF %s < #%d GOTO label%d\n", str, ans1.ans, truelabel);
+						fprintf(outfile, "blt $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "<=") == 0)
-						fprintf(outfile, "IF %s >= #%d GOTO label%d\n", str, ans1.ans, truelabel);
+						fprintf(outfile, "bge $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "<") == 0)
-						fprintf(outfile, "IF %s > #%d GOTO label%d\n", str, ans1.ans, truelabel);
+						fprintf(outfile, "bgt $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "==") == 0)
-						fprintf(outfile, "IF %s == #%d GOTO label%d\n", str, ans1.ans, truelabel);
+						fprintf(outfile, "beq $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "!=") == 0)
-						fprintf(outfile, "IF %s != #%d GOTO label%d\n", str, ans1.ans, truelabel);
+						fprintf(outfile, "bne $8, $9, label%d\n", truelabel);
+					if (falselabel != 0)
+						fprintf(outfile, "j label%d\n", falselabel);		
 				}
 				else {
-					Tree_Node *id1 = node->child;
-					char str1[20];
-					if (ans1.flag == 2)
-						strcpy(str1, id1->value);
-					else {
-						int tempvar1 = gettempvar();
-						sprintf(str1, "v%d", tempvar1);
-						translateExp(node, 0, str1);
-					}
-					Tree_Node *id2 = node3->child;
-					char str2[20];
-					if (ans2.flag == 2)
-						strcpy(str2, id2->value);
-					else {
-						int tempvar2 = gettempvar();
-						sprintf(str2, "v%d", tempvar2);
-						translateExp(node3, 0, str2);
-					}
+					translateExp(node, 0, -8);
+					translateExp(node3, 0, -9);
 					if (strcmp(node2->value, ">=") == 0)
-						fprintf(outfile, "IF %s >= %s GOTO label%d\n", str1, str2, truelabel);
+						fprintf(outfile, "bge $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, ">") == 0)
-						fprintf(outfile, "IF %s > %s GOTO label%d\n", str1, str2, truelabel);
+						fprintf(outfile, "bgt $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "<=") == 0)
-						fprintf(outfile, "IF %s <= %s GOTO label%d\n", str1, str2, truelabel);
+						fprintf(outfile, "ble $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "<") == 0)
-						fprintf(outfile, "IF %s < %s GOTO label%d\n", str1, str2, truelabel);
+						fprintf(outfile, "blt $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "==") == 0)
-						fprintf(outfile, "IF %s == %s GOTO label%d\n", str1, str2, truelabel);
+						fprintf(outfile, "beq $8, $9, label%d\n", truelabel);
 					else if (strcmp(node2->value, "!=") == 0)
-						fprintf(outfile, "IF %s != %s GOTO label%d\n", str1, str2, truelabel);				
+						fprintf(outfile, "bne $8, $9, label%d\n", truelabel);
+					if (falselabel != 0)
+						fprintf(outfile, "j label%d\n", falselabel);		
 				}
 			}
+		}	
+	}
+	else if (strcmp(node->type, "ID") == 0) {
+		Tree_Node *node2 = node->sibling;
+		if (node2 == NULL) {
+			int i = 0;
+			for (i = 0; i < variable_symbol_table.top; i++)
+				if (variable_symbol_table.existence[i] > 0 && strcmp(variable_symbol_table.table[i]->name, node->value) == 0) {
+					fprintf(outfile, "lw $8, %d($fp)\n", -variable_symbol_table.table[i]->offset);
+					break;
+				}
+
+			if (truelabel == 0 && falselabel != 0)
+				fprintf(outfile, "beqz $8, label%d\n", falselabel);
+			else if (truelabel != 0 && falselabel == 0)
+				fprintf(outfile, "bnez $8, label%d\n", truelabel);
+			else if (truelabel != 0 && falselabel != 0){
+				fprintf(outfile, "beqz $8, label%d\n", falselabel);
+				fprintf(outfile, "j label%d\n", truelabel);
+			}
 		}
-		else if (strcmp(node->type, "ID") == 0) {
-			Tree_Node *node2 = node->sibling;
-			if (node2 == NULL)
-				fprintf(outfile, "IF %s != #0 GOTO label%d\n", node->value, truelabel);
-			else{
-				node2 = node2->sibling;
-				int tempvar1 = gettempvar();
-				if (strcmp(node2->type, "Args") == 0) {
-					void analysisArgs(Tree_Node *args) {
-						args = args->child;
-						if (args->sibling != NULL)
-							analysisArgs(args->sibling->sibling);
-						expans ans = analysisExp(args);
-						if (ans.flag == 1)
-							fprintf(outfile, "ARG #%d\n", ans.ans);
-						else {
-							Tree_Node *id = args->child;
-							char str[20];
-							if (ans.flag == 2)
-								strcpy(str, id->value);
-							else {
-								int tempvar2 = gettempvar();
-								sprintf(str, "v%d", tempvar2);
-								translateExp(args, 0, str);
-							}
-							fprintf(outfile, "ARG %s\n", str);
-						}
+		else {
+			node2 = node2->sibling;
+			int varsize = 0;
+			if (strcmp(node2->type, "Args") == 0) {
+				void analysisArgs(Tree_Node *args) {
+					args = args->child;
+					if (args->sibling != NULL)
+						analysisArgs(args->sibling->sibling);
+					expans ans = analysisExp(args);
+					if (ans.flag == 1) {
+						fprintf(outfile, "li $4, %d\n", ans.ans);
+						fprintf(outfile, "sw $4, 0($sp)\n");
+						varsize += 4;
+						fprintf(outfile, "addi $sp, $sp, -4\n");
 					}
-					analysisArgs(node2);
-					fprintf(outfile, "v%d := CALL %s\n", tempvar1, node->value);
+					else {
+						translateExp(args, 0, -4);
+						fprintf(outfile, "sw $4, 0($sp)\n");
+						varsize += 4;
+						fprintf(outfile, "addi $sp, $sp, -4\n");
+					}
 				}
-				else {
-					if (strcmp(node->value, "read") == 0)
-						fprintf(outfile, "READ v%d\n", tempvar1);
-					else
-						fprintf(outfile, "v%d := CALL %s\n", tempvar1, node->value);
-				}
-				fprintf(outfile, "IF v%d != #0 GOTO label%d\n", tempvar1, truelabel);
+				analysisArgs(node2);
+			}
+			
+			fprintf(outfile, "sw $v0, 0($sp)\n");
+			fprintf(outfile, "addi $sp, $sp, -4\n");
+			fprintf(outfile, "sw $ra, 0($sp)\n");
+			fprintf(outfile, "addi $sp, $sp, -4\n");
+
+			fprintf(outfile, "sw $fp, 0($sp)\n");
+			fprintf(outfile, "move $fp, $sp\n");
+			fprintf(outfile, "addi $sp, $sp, -4\n");
+
+			fprintf(outfile, "jal %s\n", node->value);
+			
+			fprintf(outfile, "move $sp, $fp\n");
+			fprintf(outfile, "lw $fp, 0($sp)\n");
+			
+			fprintf(outfile, "addi $sp, $sp, 4\n");
+			fprintf(outfile, "lw $ra, 0($sp)\n");
+
+			
+			if (truelabel == 0 && falselabel != 0)
+				fprintf(outfile, "beqz $v0 label%d\n", falselabel);
+			if (truelabel != 0 && falselabel == 0)
+				fprintf(outfile, "bnez $v0 label%d\n", truelabel);
+			if (truelabel != 0 && falselabel != 0) {
+				fprintf(outfile, "bnez $v0 label%d\n", truelabel);
+				fprintf(outfile, "j label%d\n", falselabel);	
+			}
+			
+			fprintf(outfile, "addi $sp, $sp, 4\n");
+			fprintf(outfile, "lw $v0, 0($sp)\n");
+
+			if (varsize > 0)
+				fprintf(outfile, "addi $sp, $sp, %d\n", varsize);
+		}
+	}
+	else if (strcmp(node->type, "LP") == 0) {
+		Tree_Node *node2 = node->sibling;
+		expans ans = analysisExp(node2);
+		if (ans.flag == 1) {
+			if (truelabel == 0 && falselabel != 0 && ans.ans == 0)
+				fprintf(outfile, "j label%d\n", falselabel);
+			if (truelabel != 0 && falselabel == 0 && ans.ans != 0)
+				fprintf(outfile, "j label%d\n", truelabel);
+			if (truelabel != 0 && falselabel != 0) {
+				if (ans.ans == 0)
+					fprintf(outfile, "j label%d\n", falselabel);
+				else
+					fprintf(outfile, "j label%d\n", truelabel);
 			}
 		}
-		else if (strcmp(node->type, "LP") == 0) {
-			Tree_Node *node2 = node->sibling;
-			expans ans = analysisExp(node2);
-			if (ans.flag == 1) {
+		else
+			translateCon(node2, truelabel, falselabel);
+	}
+	else if (strcmp(node->type, "NOT") == 0) {
+		expans ans = analysisExp(node->sibling);
+		if (ans.flag == 1) {
+			if (truelabel == 0 && falselabel != 0 && ans.ans != 0)
+				fprintf(outfile, "j label%d\n", falselabel);
+			if (truelabel != 0 && falselabel == 0 && ans.ans == 0)
+				fprintf(outfile, "j label%d\n", truelabel);
+			if (truelabel != 0 && falselabel != 0) {
 				if (ans.ans != 0)
-					fprintf(outfile, "GOTO label%d\n", truelabel);
+					fprintf(outfile, "j label%d\n", falselabel);
+				else
+					fprintf(outfile, "j label%d\n", truelabel);
 			}
-			else
-				translateCon(node2, truelabel, falselabel);
 		}
-		else if (strcmp(node->type, "NOT") == 0) {
-			expans ans = analysisExp(node->sibling);
-			if (ans.flag == 1) {
-				if (ans.ans == 0)
-					fprintf(outfile, "GOTO label%d\n", truelabel);
-			}
+		else
+			translateCon(node->sibling, falselabel, truelabel);
+	}
+	else if (strcmp(node->type, "INT") == 0) {
+		int num = atoi(node->value);
+		
+		if (truelabel == 0 && falselabel != 0 && num == 0)
+			fprintf(outfile, "j label%d\n", falselabel);
+		if (truelabel != 0 && falselabel == 0 && num != 0)
+			fprintf(outfile, "j label%d\n", truelabel);
+		if (truelabel != 0 && falselabel != 0) {
+			if (num == 0)
+				fprintf(outfile, "j label%d\n", falselabel);
 			else
-				translateCon(node->sibling, falselabel, truelabel);
-		}
-		else if (strcmp(node->type, "INT") == 0) {
-			int num = atoi(node->value);
-			if (num != 0)
-				fprintf(outfile, "GOTO label%d\n", truelabel);
+				fprintf(outfile, "j label%d\n", truelabel);
 		}
 	}
-	else if (truelabel != 0 && falselabel!= 0) {	
-		if (strcmp(node->type, "Exp") == 0) {
-			Tree_Node *node2 = node->sibling;
-			Tree_Node *node3 = node2->sibling;
-			if (strcmp(node2->type, "LB") == 0) {
-				int tempvar1 = gettempvar(),
-					tempvar4 = gettempvar();
-				expans ans = analysisExp(node3);
-				char dest1[20];
-				sprintf(dest1, "v%d", tempvar1);
-
-				translateExp(node, 1, dest1);
-				if (ans.flag == 0) {
-					int tempvar2 = gettempvar(), 
-						tempvar3 = gettempvar();
-					char dest2[20];
-					sprintf(dest2, "v%d", tempvar2);
-					translateExp(node3, 0, dest2);
-					fprintf(outfile, "v%d := v%d * #4\n", tempvar3, tempvar2);
-					fprintf(outfile, "v%d := v%d + v%d\n", tempvar4, tempvar1, tempvar3);
-				}
-				else
-					fprintf(outfile, "v%d := v%d + #%d\n", tempvar4, tempvar1, 4 * ans.ans);
-				fprintf(outfile, "IF *v%d == #0 GOTO label%d\n", tempvar4, falselabel);
-				fprintf(outfile, "GOTO label%d\n", truelabel);
-			}
-			else if (strcmp(node2->type, "DOT") == 0) {
-				int tempvar = gettempvar(),
-					tempvar2 = gettempvar();
-				char dest1[20];
-				sprintf(dest1, "v%d", tempvar);
-				symbol_type *type = translateExp(node, 1, dest1);
-				int size = 0, i = 0;
-				for (i = 0; i < type->struct_field.table_length; i++) {
-					if (strcmp(type->struct_field.field_table[i].name, node3->value) == 0) {
-						fprintf(outfile, "v%d := v%d + #%d\n", tempvar2, tempvar, size);
-						break;
-					}
-					size += type->struct_field.field_table[i].type->size;
-				}
-				fprintf(outfile, "IF *v%d == #0 GOTO label%d\n", tempvar2, falselabel);
-				fprintf(outfile, "GOTO label%d\n", truelabel);
-			}
-			else if (strcmp(node2->type, "AND") == 0) {
-				expans ans1 = analysisExp(node),
-					   ans2 = analysisExp(node3);
-				if (ans1.flag != 1 && ans2.flag != 1){
-					translateCon(node, 0, falselabel);
-					translateCon(node3, truelabel, falselabel);
-				}
-				else if (ans1.flag == 1 && ans2.flag != 1) {
-					if (ans1.ans == 0)
-						fprintf(outfile, "GOTO label%d\n", falselabel);
-					else
-						translateCon(node3, truelabel, falselabel);
-				}
-				else if (ans1.flag != 1 && ans2.flag == 1) {
-					if (ans2.ans == 0)
-						fprintf(outfile, "GOTO label%d\n", falselabel);
-					else
-						translateCon(node, truelabel, falselabel);
-				}
-				else {
-					if (ans1.ans == 0 || ans2.ans == 0)	
-						fprintf(outfile, "GOTO label%d\n", falselabel);
-					else
-						fprintf(outfile, "GOTO label%d\n", truelabel);
-				}
-			}
-			else if (strcmp(node2->type, "OR") == 0) {
-				expans ans1 = analysisExp(node),
-					   ans2 = analysisExp(node3);
-				if (ans1.flag != 1 && ans2.flag != 1){
-					int newlabel = getlabel();
-					translateCon(node, truelabel, 0);
-					translateCon(node3, truelabel, falselabel);
-				}
-				else if (ans1.flag == 1 && ans2.flag != 1) {
-					if (ans1.ans == 0)
-						translateCon(node3, truelabel, falselabel);
-					else
-						fprintf(outfile, "GOTO label%d\n", truelabel);
-				}
-				else if (ans1.flag != 1 && ans2.flag == 1) {
-					if (ans2.ans == 0)
-						translateCon(node, truelabel, falselabel);
-					else
-						fprintf(outfile, "GOTO label%d\n", truelabel);
-				}
-				else {
-					if (ans1.ans == 0 && ans2.ans == 0)	
-						fprintf(outfile, "GOTO label%d\n", falselabel);
-					else
-						fprintf(outfile, "GOTO label%d\n", truelabel);
-				}
-
-			}
-			else if (strcmp(node2->type, "RELOP") == 0) {
-				expans ans1 = analysisExp(node),
-					   ans2 = analysisExp(node3);
-				if (ans1.flag == 1 && ans2.flag == 1) {
-					if ((strcmp(node2->value, ">=") == 0 && ans1.ans < ans2.ans)
-					|| (strcmp(node2->value, ">") == 0 && ans1.ans <= ans2.ans)
-					|| (strcmp(node2->value, "<=") == 0 && ans1.ans > ans2.ans)
-					|| (strcmp(node2->value, "<") == 0 && ans1.ans >= ans2.ans)
-					|| (strcmp(node2->value, "==") == 0 && ans1.ans != ans2.ans)
-					|| (strcmp(node2->value, "!=") == 0 && ans1.ans == ans2.ans))
-						fprintf(outfile, "GOTO label%d\n", falselabel);
-					else
-						fprintf(outfile, "GOTO label%d\n", truelabel);
-				}
-				else if (ans1.flag != 1 && ans2.flag == 1) {
-					Tree_Node *id = node->child;
-					char str[20];
-					if (ans1.flag == 2)
-						strcpy(str, id->value);
-					else {
-						int tempvar = gettempvar();
-						sprintf(str, "v%d", tempvar);
-						translateExp(node, 0, str);
-					}
-					if (strcmp(node2->value, ">=") == 0)
-						fprintf(outfile, "IF %s < #%d GOTO label%d\n", str, ans2.ans, falselabel);
-					else if (strcmp(node2->value, ">") == 0)
-						fprintf(outfile, "IF %s <= #%d GOTO label%d\n", str, ans2.ans, falselabel);
-					else if (strcmp(node2->value, "<=") == 0)
-						fprintf(outfile, "IF %s > #%d GOTO label%d\n", str, ans2.ans, falselabel);
-					else if (strcmp(node2->value, "<") == 0)
-						fprintf(outfile, "IF %s >= #%d GOTO label%d\n", str, ans2.ans, falselabel);
-					else if (strcmp(node2->value, "==") == 0)
-						fprintf(outfile, "IF %s != #%d GOTO label%d\n", str, ans2.ans, falselabel);
-					else if (strcmp(node2->value, "!=") == 0)
-						fprintf(outfile, "IF %s == #%d GOTO label%d\n", str, ans2.ans, falselabel);
-					fprintf(outfile, "GOTO label%d\n", truelabel);
-				}
-				else if (ans1.flag == 1 && ans2.flag != 1) {
-					Tree_Node *id = node3->child;
-					char str[20];
-					if (ans2.flag == 2)
-						strcpy(str, id->value);
-					else {
-						int tempvar = gettempvar();
-						sprintf(str, "v%d", tempvar);
-						translateExp(node, 0, str);
-					}
-					if (strcmp(node2->value, ">=") == 0)
-						fprintf(outfile, "IF %s > #%d GOTO label%d\n", str, ans1.ans, falselabel);
-					else if (strcmp(node2->value, ">") == 0)
-						fprintf(outfile, "IF %s >= #%d GOTO label%d\n", str, ans1.ans, falselabel);
-					else if (strcmp(node2->value, "<=") == 0)
-						fprintf(outfile, "IF %s < #%d GOTO label%d\n", str, ans1.ans, falselabel);
-					else if (strcmp(node2->value, "<") == 0)
-						fprintf(outfile, "IF %s <= #%d GOTO label%d\n", str, ans1.ans, falselabel);
-					else if (strcmp(node2->value, "==") == 0)
-						fprintf(outfile, "IF %s != #%d GOTO label%d\n", str, ans1.ans, falselabel);
-					else if (strcmp(node2->value, "!=") == 0)
-						fprintf(outfile, "IF %s == #%d GOTO label%d\n", str, ans1.ans, falselabel);
-					fprintf(outfile, "GOTO label%d\n", truelabel);
-				}
-				else {
-					Tree_Node *id1 = node->child;
-					char str1[20];
-					if (ans1.flag == 2)
-						strcpy(str1, id1->value);
-					else {
-						int tempvar1 = gettempvar();
-						sprintf(str1, "v%d", tempvar1);
-						translateExp(node, 0, str1);
-					}
-					Tree_Node *id2 = node3->child;
-					char str2[20];
-					if (ans2.flag == 2)
-						strcpy(str2, id2->value);
-					else {
-						int tempvar2 = gettempvar();
-						sprintf(str2, "v%d", tempvar2);
-						translateExp(node3, 0, str2);
-					}
-					if (strcmp(node2->value, ">=") == 0)
-						fprintf(outfile, "IF %s < %s GOTO label%d\n", str1, str2, falselabel);
-					else if (strcmp(node2->value, ">") == 0)
-						fprintf(outfile, "IF %s <= %s GOTO label%d\n", str1, str2, falselabel);
-					else if (strcmp(node2->value, "<=") == 0)
-						fprintf(outfile, "IF %s > %s GOTO label%d\n", str1, str2, falselabel);
-					else if (strcmp(node2->value, "<") == 0)
-						fprintf(outfile, "IF %s >= %s GOTO label%d\n", str1, str2, falselabel);
-					else if (strcmp(node2->value, "==") == 0)
-						fprintf(outfile, "IF %s != %s GOTO label%d\n", str1, str2, falselabel);
-					else if (strcmp(node2->value, "!=") == 0)
-						fprintf(outfile, "IF %s == %s GOTO label%d\n", str1, str2, falselabel);				
-					fprintf(outfile, "GOTO label%d\n", truelabel);
-				}
-			}
-		}
-		else if (strcmp(node->type, "ID") == 0) {
-			Tree_Node *node2 = node->sibling;
-			if (node2 == NULL)
-				fprintf(outfile, "IF %s == #0 GOTO label%d\n", node->value, falselabel);
-			else{
-				node2 = node2->sibling;
-				int tempvar1 = gettempvar();
-				if (strcmp(node2->type, "Args") == 0) {
-					void analysisArgs(Tree_Node *args) {
-						args = args->child;
-						if (args->sibling != NULL)
-							analysisArgs(args->sibling->sibling);
-						expans ans = analysisExp(args);
-						if (ans.flag == 1)
-							fprintf(outfile, "ARG #%d\n", ans.ans);
-						else {
-							Tree_Node *id = args->child;
-							char str[20];
-							if (ans.flag == 2)
-								strcpy(str, id->value);
-							else {
-								int tempvar2 = gettempvar();
-								sprintf(str, "v%d", tempvar2);
-								translateExp(args, 0, str);
-							}
-							fprintf(outfile, "ARG %s\n", str);
-						}
-					}
-					analysisArgs(node2);
-					fprintf(outfile, "v%d := CALL %s\n", tempvar1, node->value);
-				}
-				else {
-					if (strcmp(node->value, "read") == 0)
-						fprintf(outfile, "READ v%d\n", tempvar1);
-					else
-						fprintf(outfile, "v%d := CALL %s\n", tempvar1, node->value);
-				}
-				fprintf(outfile, "IF v%d != #0 GOTO label%d\n", tempvar1, falselabel);
-			}
-			fprintf(outfile, "GOTO label%d\n", truelabel);
-		}
-		else if (strcmp(node->type, "LP") == 0) {
-			Tree_Node *node2 = node->sibling;
-			expans ans = analysisExp(node2);
-			if (ans.flag == 1) {
-				if (ans.ans == 0)
-					fprintf(outfile, "GOTO label%d\n", falselabel);
-				else
-					fprintf(outfile, "GOTO label%d\n", truelabel);
-			}
-			else
-				translateCon(node2, truelabel, falselabel);
-		}
-		else if (strcmp(node->type, "NOT") == 0) {
-			expans ans = analysisExp(node->sibling);
-			if (ans.flag == 1) {
-				if (ans.ans == 0)
-					fprintf(outfile, "GOTO label%d\n", falselabel);
-				else
-					fprintf(outfile, "GOTO label%d\n", truelabel);
-
-			}
-			else
-				translateCon(node->sibling, falselabel, truelabel);
-		}
-		else if (strcmp(node->type, "INT") == 0) {
-			int num = atoi(node->value);
-			if (num != 0)
-				fprintf(outfile, "GOTO label%d\n", falselabel);
-			else		
-				fprintf(outfile, "GOTO label%d\n", truelabel);
-		}
-	}
-
 }
 
-symbol_type *translateExp(Tree_Node *exp, int flag, char *dest) {
+symbol_type *translateExp(Tree_Node *exp, int flag, int dest) {
 	//printf("exp\n");
 	// flag = 0 : value, flag = 1 : address
+	// dest < 0 : reg, dest >= 0 : offset
 	symbol_type *int_type = (symbol_type *)malloc(sizeof(symbol_type));
 	int_type->type = TYPE_INT;
 
@@ -1219,254 +906,319 @@ symbol_type *translateExp(Tree_Node *exp, int flag, char *dest) {
 		Tree_Node *node3 = node2->sibling;
 		if (strcmp(node2->type, "ASSIGNOP") == 0) {
 			Tree_Node *id = node->child;
-			if (strcmp(id->type, "ID") == 0 && id->sibling == NULL)
-				translateExp(node3, 0, id->value);
-			else {
-				int tempvar1 = gettempvar();
-				char dest1[20], dest2[20];
-				sprintf(dest1, "v%d", tempvar1);
-				translateExp(node, 1, dest1);
-				expans ans = analysisExp(node3);
-				if (ans.flag == 1)
-					sprintf(dest2, "#%d", ans.ans);
-				else {
-					if (ans.flag == 2)
-						strcpy(dest2, node3->child->value);
-					else {
-						int tempvar2 = gettempvar();
-						sprintf(dest2, "v%d", tempvar2);
-						translateExp(node3, 0, dest2);
+			if (strcmp(id->type, "ID") == 0) {
+				int i = 0;
+				for (i = 0; i < variable_symbol_table.top; i++)
+					if (variable_symbol_table.existence[i] > 0 && strcmp(variable_symbol_table.table[i]->name, id->value) == 0) {
+						translateExp(node3, 0, variable_symbol_table.table[i]->offset);
+						break;
 					}
-				}
-				fprintf(outfile, "*v%d := %s\n", tempvar1, dest2);
-			}
-			return int_type;
-		}
-		else if (strcmp(node2->type, "LB") == 0 && dest != NULL) {
-			int tempvar1 = gettempvar();
-			expans ans = analysisExp(node3);
-			char dest1[20];
-			sprintf(dest1, "v%d", tempvar1);
-			symbol_type *type = translateExp(node, 1, dest1);
-			if (ans.flag != 1) {
-				int tempvar3 = gettempvar();
-				char dest2[20];
-				if (ans.flag == 2)
-					strcpy(dest2, node3->child->value);
-				else {
-					int	tempvar2 = gettempvar();
-					sprintf(dest2, "v%d", tempvar2);
-					translateExp(node3, 0, dest2);
-				}
-				fprintf(outfile, "v%d := %s * #%d\n", tempvar3, dest2, type->array_field.subtype->size);
-				if (flag == 0 && type->array_field.subtype->type == TYPE_INT) {
-					int tempvar4 = gettempvar();
-					fprintf(outfile, "v%d := v%d + v%d\n", tempvar4, tempvar1, tempvar3);
-					fprintf(outfile, "%s := *v%d\n", dest, tempvar4);
-				}
-				else
-					fprintf(outfile, "%s := v%d + v%d\n", dest, tempvar1, tempvar3);
 			}
 			else {
-				if (flag == 0 && type->array_field.subtype->type == TYPE_INT) {
-					int tempvar2 = gettempvar();
-					fprintf(outfile, "v%d := v%d + #%d\n", tempvar2, tempvar1, 4 * ans.ans);
-					fprintf(outfile, "%s := *v%d\n", dest, tempvar2);
-				}
-				else
-					fprintf(outfile, "%s := v%d + #%d\n", dest, tempvar1, type->array_field.subtype->size * ans.ans);
-			}
-			return type->array_field.subtype;
-		}
-		else if (strcmp(node2->type, "DOT") == 0 && dest != NULL) {	
-			int tempvar1 = gettempvar();
-			char dest1[20];
-			sprintf(dest1, "v%d", tempvar1);
-			symbol_type *type = translateExp(node, 1, dest1);
-			symbol_type *fieldtype;			
-			int size = 0, i = 0;
-			for (i = 0; i < type->struct_field.table_length; i++) {
-				if (strcmp(type->struct_field.field_table[i].name, node3->value) == 0) {
-					fieldtype = type->struct_field.field_table[i].type;
-					if (flag == 0 && fieldtype->type == TYPE_INT) {
-						int tempvar2 = gettempvar();
-						fprintf(outfile, "v%d := v%d + #%d\n", tempvar2, tempvar1, size);
-						fprintf(outfile, "%s := *v%d\n", dest, tempvar2);
+				int i = 0, varaddr = 0;
+				for (i = 0; i < variable_symbol_table.top; i++)
+					if (variable_symbol_table.existence[i] > 0 && strcmp(variable_symbol_table.table[i]->name, id->child->value) == 0) {
+						varaddr = variable_symbol_table.table[i]->offset;
+						break;
+					}
+				
+				expans ans = analysisExp(id->sibling->sibling),
+					   ans2 = analysisExp(node3);
+				if (ans.flag == 1) {
+					varaddr += 4 * ans.ans;
+					if (ans2.flag == 1) {
+						fprintf(outfile, "li $8, %d\n", ans2.ans);
+						fprintf(outfile, "sw $8, %d($fp)\n", -varaddr);
 					}
 					else
-						fprintf(outfile, "%s := v%d + #%d\n", dest, tempvar1, size);
-					break;
+						translateExp(node3, 0, varaddr);
 				}
-				size += type->struct_field.field_table[i].type->size;
+				else {
+					translateExp(id->sibling->sibling, 0, -8);
+					fprintf(outfile, "sll $8, $8, 2\n");
+					fprintf(outfile, "neg $8, $8\n");
+					fprintf(outfile, "la $8, %d($8)\n", -varaddr);
+					fprintf(outfile, "add, $8, $8, $fp\n");
+					if (ans2.flag == 2) {
+						fprintf(outfile, "li, $9, %d\n", ans2.ans);
+						fprintf(outfile, "sw $9, 0($8)\n");
+					}
+					else {
+						translateExp(node3, 0, -9);
+						fprintf(outfile, "sw $9, 0($8)\n");
+					}
+				}
 			}
+			return NULL;
 		}
-		else if (dest != NULL) {
-			char dest1[20], dest2[20];
+		else if (strcmp(node2->type, "LB") == 0 && dest > -32) {
+			Tree_Node *id = node->child;
+				int i = 0, varaddr = 0;
+				for (i = 0; i < variable_symbol_table.top; i++)
+					if (variable_symbol_table.existence[i] > 0 && strcmp(variable_symbol_table.table[i]->name, id->value) == 0) {
+						varaddr = variable_symbol_table.table[i]->offset;
+						break;
+					}
+				
+				expans ans = analysisExp(node3);
+				if (ans.flag == 1) {
+					varaddr += 4 * ans.ans;
+					if (dest >= 0) {
+						fprintf(outfile, "sw $8, 0($sp)\n");
+						fprintf(outfile, "addi $sp, $sp, -4\n");
+						
+						fprintf(outfile, "lw $8, %d($fp)\n", -varaddr);
+						fprintf(outfile, "sw $8, %d($fp)\n", -dest);
+						
+						fprintf(outfile, "addi $sp, $sp, 4\n");
+						fprintf(outfile, "lw $8, 0($sp)\n");
+					}
+					else if (dest < 0 && dest > -32) {
+						fprintf(outfile, "lw $%d, %d($fp)\n", -dest, -varaddr);
+					}
+				}
+				else {
+					int tdest;
+					if (dest >= 0) {
+						tdest = 8;
+						fprintf(outfile, "sw $8, 0($sp)\n");
+						fprintf(outfile, "addi $sp, $sp, -4\n");
+					}
+					else {
+						tdest = -dest;
+					}
+
+					translateExp(node3, 0, -tdest);
+					fprintf(outfile, "sll $%d, $%d, 2\n", tdest, tdest);
+					fprintf(outfile, "neg $%d, $%d\n", tdest, tdest);
+					fprintf(outfile, "la $%d, %d($%d)\n", tdest, -varaddr, tdest);
+					fprintf(outfile, "add $%d, $%d, $fp\n", tdest, tdest);
+
+
+					if (dest >= 0) {
+						fprintf(outfile, "lw $8, 0($8)\n");
+						fprintf(outfile, "sw $8, %d($fp)\n", -dest);
+						fprintf(outfile, "addi $sp, $sp, 4\n");
+						fprintf(outfile, "lw $8, 0($sp)\n");
+					}
+					else
+						fprintf(outfile, "lw $%d, 0($%d)\n", -dest, -dest);
+				}
+		}
+		else if (dest > -32) {
+			if (dest != -8) {
+				fprintf(outfile, "sw $8, 0($sp)\n");
+				fprintf(outfile, "addi $sp, $sp, -4\n");
+			}
+			if (dest != -9) {
+				fprintf(outfile, "sw $9, 0($sp)\n");
+				fprintf(outfile, "addi $sp, $sp, -4\n");
+			}
+
 			expans ans1 = analysisExp(node),
 				   ans2 = analysisExp(node3);
 			if (ans1.flag == 1)
-				sprintf(dest1, "#%d", ans1.ans);
-			else {
-				if (node->child->sibling == NULL && strcmp(node->child->type, "ID") == 0)
-					strcpy(dest1, node->child->value);
-				else {
-					int tempvar1 = gettempvar();
-					sprintf(dest1, "v%d", tempvar1);
-					translateExp(node, 0, dest1);
-				}
-			}
+				fprintf(outfile, "li $8, %d\n", ans1.ans);
+			else 
+				translateExp(node, 0, -8);
 
 			if (ans2.flag == 1)
-				sprintf(dest2, "#%d", ans2.ans);
-			else {
-				if (node3->child->sibling == NULL && strcmp(node3->child->type, "ID") == 0)
-					strcpy(dest2, node3->child->value);
-				else {
-					int tempvar2 = gettempvar();
-					sprintf(dest2, "v%d", tempvar2);
-					translateExp(node3, 0, dest2);
-				}
+				fprintf(outfile, "li $9, %d\n", ans2.ans);	
+			else 
+				translateExp(node3, 0, -9);
+			
+			int tdest;
+			if (dest >= 0)
+				tdest = 8;
+			else
+				tdest = -dest;
+
+			if (strcmp(node2->type, "AND") == 0)
+				fprintf(outfile, "and $%d, $8, $9\n", tdest);
+			else if (strcmp(node2->type, "OR") == 0)
+				fprintf(outfile, "or $%d, $8, $9\n", tdest);
+			else if (strcmp(node2->type, "PLUS") == 0)
+				fprintf(outfile, "add $%d, $8, $9\n", tdest);
+			else if (strcmp(node2->type, "MINUS") == 0) {	
+				fprintf(outfile, "neg $9, $9\n");
+				fprintf(outfile, "add $%d, $8, $9\n", tdest);
 			}
-			fprintf(outfile, "%s := %s %s %s\n", dest, dest1, node2->value, dest2);
+			else if (strcmp(node2->type, "STAR") == 0)
+				fprintf(outfile, "mul $%d, $8, $9\n", tdest);
+			else if (strcmp(node2->type, "DIV") == 0)
+				fprintf(outfile, "div $%d, $8, $9\n", tdest);
+			
+			if (dest >= 0)
+				fprintf(outfile, "sw $8, %d($fp)\n", -dest);
+			if (dest != -9) {
+				fprintf(outfile, "addi $sp, $sp, 4\n");
+				fprintf(outfile, "lw $9, 0($sp)\n");
+			}
+			if (dest != -8) {
+				fprintf(outfile, "addi $sp, $sp, 4\n");
+				fprintf(outfile, "lw $8, 0($sp)\n");
+			}
 			return int_type;
 		}
 	}
 	else if (strcmp(node->type, "ID") == 0) {
 		Tree_Node *node2 = node->sibling;
-		symbol_table *table = NULL;
-		symbol_type *type1 = NULL;
-		int i = 0;
-
-		if (node2 == NULL){
-			for (i = variable_symbol_table.top - 1; i >=0; i--){
-				symbol_table_entry *table = variable_symbol_table.table[i];
-				if (variable_symbol_table.existence[i] >= 0 && strcmp(table->name, node->value) == 0) {
-					if (table->type->type == TYPE_INT){
-						if (flag == 0)
-							fprintf(outfile, "%s := %s\n", dest, node->value);
-						else
-							fprintf(outfile, "%s := &%s\n", dest, node->value);
-					}
-					else {
-						if (variable_symbol_table.existence[i] == 1)
-							fprintf(outfile, "%s := &%s\n", dest, node->value);
-						else
-							fprintf(outfile, "%s := %s\n", dest, node->value);
-					}
-					return variable_symbol_table.table[i]->type;
+		if (node2 == NULL) {
+			int i = 0, tdest;
+			if (dest >= 0) {
+				tdest = 8;
+				fprintf(outfile, "sw $8, 0($sp)\n");
+				fprintf(outfile, "addi $sp, $sp, -4\n");
+			}
+			else {
+				tdest = -dest;
+			}
+			for (i = 0; i < variable_symbol_table.top; i++)
+				if (variable_symbol_table.existence[i] > 0 && strcmp(variable_symbol_table.table[i]->name, node->value) == 0) {
+					fprintf(outfile, "lw $%d, %d($fp)\n", tdest, -variable_symbol_table.table[i]->offset);
+					break;
 				}
+
+			if (dest >= 0) {
+				fprintf(outfile, "sw $8, %d($fp)\n", -dest);
+
+				fprintf(outfile, "addi $sp, $sp, 4\n");
+				fprintf(outfile, "lw $8, 0($sp)\n");
 			}
 		}
 		else {
 			node2 = node2->sibling;
+			int varsize = 0;
 			if (strcmp(node2->type, "Args") == 0) {
-				if (strcmp(node->value, "write") == 0){
-					node2 = node2->child;
-					expans ans = analysisExp(node2);
-					if (ans.flag == 1)
-						fprintf(outfile, "WRITE #%d\n", ans.ans);
-					else {
-						Tree_Node *id = node2->child;
-						if (ans.flag == 2)
-							fprintf(outfile, "WRITE %s\n", id->value);
-						else {
-							int tempvar1 = gettempvar();
-							char dest1[20];
-							sprintf(dest1, "v%d", tempvar1);
-							translateExp(node2, 0, dest1);
-							fprintf(outfile, "WRITE %s\n", dest1);
-						}
+				void analysisArgs(Tree_Node *args) {
+					args = args->child;
+					if (args->sibling != NULL)
+						analysisArgs(args->sibling->sibling);
+					expans ans = analysisExp(args);
+					if (ans.flag == 1) {
+						fprintf(outfile, "li $4, %d\n", ans.ans);
+						fprintf(outfile, "sw $4, 0($sp)\n");
+						varsize += 4;
+						fprintf(outfile, "addi $sp, $sp, -4\n");
 					}
-					return NULL;
+					else {
+						translateExp(args, 0, -4);
+						fprintf(outfile, "sw $4, 0($sp)\n");
+						varsize += 4;
+						fprintf(outfile, "addi $sp, $sp, -4\n");
+					}
 				}
-				else {
-					void analysisArgs(Tree_Node *args) {
-						args = args->child;
-						if (args->sibling != NULL)
-							analysisArgs(args->sibling->sibling);
-						expans ans = analysisExp(args);
-						if (ans.flag == 1)
-							fprintf(outfile, "ARG #%d\n", ans.ans);
-						else {
-							Tree_Node *id = args->child;
-							char str[20];
-							if (ans.flag == 2){
-								int i = 0;
-								for (i = 0; i < variable_symbol_table.top; i++)
-									if (variable_symbol_table.existence[i] > 0 && strcmp(id->value, variable_symbol_table.table[i]->name) == 0) {
-										if (variable_symbol_table.existence[i] == 1 && variable_symbol_table.table[i]->type->type != TYPE_INT)
-											sprintf(str, "&%s", id->value);
-										else
-											strcpy(str, id->value);
-								}
+				analysisArgs(node2);
+			}
 
-							}
-							else {
-								int tempvar2 = gettempvar();
-								sprintf(str, "v%d", tempvar2);
-								translateExp(args, 0, str);
-							}
-							fprintf(outfile, "ARG %s\n", str);
-						}
-					}
-					analysisArgs(node2);
-					if (dest != NULL)
-						fprintf(outfile, "%s := CALL %s\n", dest, node->value);
-					else {
-						int tempvarn = gettempvar();
-						fprintf(outfile, "v%d := CALL %s\n", tempvarn, node->value);
-					}
-					return int_type;
-				}
+			fprintf(outfile, "sw $ra, 0($sp)\n");
+			fprintf(outfile, "addi $sp, $sp, -4\n");
+
+			fprintf(outfile, "sw $8, 0($sp)\n");
+			fprintf(outfile, "addi $sp, $sp, -4\n");
+			fprintf(outfile, "sw $9, 0($sp)\n");
+			fprintf(outfile, "addi $sp, $sp, -4\n");
+
+
+			fprintf(outfile, "sw $fp, 0($sp)\n");
+			fprintf(outfile, "move $fp, $sp\n");
+			fprintf(outfile, "addi $sp, $sp, -4\n");
+
+			fprintf(outfile, "jal %s\n", node->value);
+
+			fprintf(outfile, "move $sp, $fp\n");
+			fprintf(outfile, "lw $fp, 0($sp)\n");
+			
+			fprintf(outfile, "addi $sp, $sp, 4\n");
+			fprintf(outfile, "lw $9, 0($sp)\n");
+			fprintf(outfile, "addi $sp, $sp, 4\n");
+			fprintf(outfile, "lw $8, 0($sp)\n");
+			
+			fprintf(outfile, "addi $sp, $sp, 4\n");
+			fprintf(outfile, "lw $ra, 0($sp)\n");
+			
+			if (dest >= 0) {
+				fprintf(outfile, "sw $v0, %d($fp)\n", -dest);
 			}
-			else {
-				if (strcmp(node->value, "read") == 0)
-					fprintf(outfile, "READ %s\n", dest);
-				else {
-					if (dest != NULL)
-						fprintf(outfile, "%s := CALL %s\n", dest, node->value);
-					else {
-						int tempvarn = gettempvar();
-						fprintf(outfile, "v%d := CALL %s\n", tempvarn, node->value);
-					}
-				}
-			}
+			else if (dest > -32) 
+				fprintf(outfile, "move $%d, $v0\n", -dest);
+			
+			if (varsize > 0)
+				fprintf(outfile, "addi $sp, $sp, %d\n", varsize);
+		
 		}
 	}
-	else if (strcmp(node->type, "LP") == 0 && dest != NULL) {
+	else if (strcmp(node->type, "LP") == 0 && dest > -32) {
 		Tree_Node *exp = node->sibling;
 		expans ans = analysisExp(exp);
-		if (ans.flag == 1)
-			fprintf(outfile, "%s := #%d\n", dest, ans.ans);
-		else {
-			Tree_Node *id = exp->child;
-			if (ans.flag == 2)
-				fprintf(outfile, "%s := %s\n", dest, id->value);
+		if (ans.flag == 1) {
+			if (dest >= 0) {
+				fprintf(outfile, "sw $8, 0($sp)\n");
+				fprintf(outfile, "addi $sp, $sp, -4\n");
+
+				fprintf(outfile, "li $8, %d\n", ans.ans);
+				fprintf(outfile, "sw $8, %d($fp)", -dest);
+
+				fprintf(outfile, "addi $sp, $sp, 4\n");
+				fprintf(outfile, "lw $8, 0($sp)\n");	
+			}
 			else
+				fprintf(outfile, "li $%d, %d\n", -dest, ans.ans);
+		}
+		else {
 				translateExp(exp, flag, dest);
 		}
 	}
 	else if (strcmp(node->type, "MINUS") == 0) {	
 		Tree_Node *exp = node->sibling;
 		expans ans = analysisExp(exp);
-		if (ans.flag == 1)
-			fprintf(outfile, "%s := #-%d\n", dest, ans.ans);
+		if (ans.flag == 1) {
+			if (dest >= 0) {
+				fprintf(outfile, "sw $8, 0($sp)\n");
+				fprintf(outfile, "addi $sp, $sp, -4\n");
+
+				fprintf(outfile, "li $8, %d\n", ans.ans);
+				fprintf(outfile, "sw $8, %d($fp)", -dest);
+
+				fprintf(outfile, "addi $sp, $sp, 4\n");
+				fprintf(outfile, "lw $8, 0($sp)\n");	
+			}
+			else
+				fprintf(outfile, "li $%d, %d\n", -dest, ans.ans);
+		}
 		else {
-			Tree_Node *id = exp->child;
-			if (ans.flag == 2)
-				fprintf(outfile, "%s := -%s\n", dest, id->value);
+			if (dest >= 0) {
+				fprintf(outfile, "sw $8, 0($sp)\n");
+				fprintf(outfile, "addi $sp, $sp, -4\n");
+	
+				translateExp(exp, flag, -8);
+				fprintf(outfile, "sw $8, %d($fp)\n", -dest);
+
+				fprintf(outfile, "addi $sp, $sp, 4\n");
+				fprintf(outfile, "lw $8, 0($sp)\n");
+			}
 			else {
-				int tempvar1 = gettempvar();
-				char dest1[20];
-				sprintf(dest1, "v%d", tempvar1);
-				translateExp(exp, flag, dest1);
-				fprintf(outfile, "%s := -%s\n", dest, dest1);
+				translateExp(exp, flag, dest);
+				fprintf(outfile, "neg $%d, $%d\n", -dest, -dest);
 			}
 		}
 		return int_type;
 	}
 	else if (strcmp(node->type, "INT") == 0) {
-		fprintf(outfile, "%s := #%s\n", dest, node->value);
+		int num = atoi(node->value);
+		if (dest >= 0) {
+			fprintf(outfile, "sw $8, 0($sp)\n");
+			fprintf(outfile, "addi $sp, $sp, -4\n");
+	
+			fprintf(outfile, "li $8, %d\n", num);
+			fprintf(outfile, "sw $8, %d($fp)\n", -dest);
+
+			fprintf(outfile, "addi $sp, $sp, 4\n");
+			fprintf(outfile, "lw $8, 0($sp)\n");
+		}
+		else {
+			fprintf(outfile, "li $%d, %d\n", -dest, num);
+		}
 		return int_type;
 	}
 }

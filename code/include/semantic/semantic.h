@@ -35,6 +35,7 @@ typedef struct symbol_type_struct {
 
 typedef struct symbol_table_entry_struct {
 	char name[30];
+	int offset;
 	int lineno;
 	symbol_type* type;
 } symbol_table_entry;
@@ -43,14 +44,18 @@ bool check_type_equal(symbol_type *type1, symbol_type *type2);
 
 typedef struct {
 	int top, local_bottom;
-	symbol_table_entry *table[100];
-	int existence[100];
+	symbol_table_entry *table[500];
+	int existence[500];
 	table_type_class type;
 } symbol_table;
 
 symbol_table variable_symbol_table, struct_symbol_table, function_symbol_table;
 
-bool add_symbol_entry(char *name, symbol_type *type, int lineno, table_type_class table_type, int exist);
+int add_variable_symbol_entry(char *name, symbol_type *type, int lineno, int exist, int offset);
+
+bool add_function_symbol_entry(char *name, symbol_type *type, int lineno, int exist);
+
+bool add_struct_symbol_entry(char *name, symbol_type *type, int lineno, int exist);
 
 void creat_new_scope();
 void delete_local_scope();

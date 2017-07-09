@@ -43,86 +43,60 @@ bool check_type_equal(symbol_type *type1, symbol_type *type2) {
 	return true;
 }
 
-bool add_symbol_entry(char* name, symbol_type *type, int lineno, table_type_class table_type, int exist) {
+int add_variable_symbol_entry(char* name, symbol_type *type, int lineno, int exist, int offset) {
 	symbol_table_entry *entry = (symbol_table_entry *)malloc(sizeof(symbol_table_entry));
 	
 	if(entry == NULL)
 		error("malloc error\n");
 
-	int check_existence(symbol_table table) {
-		int i = 0;
-		for (i = table.local_bottom; i < table.top; i++)
-			if (strcmp(name, table.table[i]->name) == 0)
-				return i;
-		return -1;
-	}
+	symbol_table *table = &variable_symbol_table;
 
-	void add_entry(symbol_table *table) {
-		strcpy(entry->name, name);
-		entry->lineno = lineno;
-		entry->type = type;
-		table->table[table->top] = entry;
-		table->existence[table->top] = exist;
-		table->top = table->top + 1;
-	}
+	strcpy(entry->name, name);
+	entry->lineno = lineno;
+	entry->type = type;
+	entry->offset = offset;
 
-	switch (table_type) {
-		case STRUCT_TABLE:
-			if (check_existence(struct_symbol_table) == -1
-			 && check_existence(function_symbol_table) == -1
-			 && check_existence(variable_symbol_table) == -1)
-				add_entry(&struct_symbol_table);
-			else {
-				semantic_error(16, lineno, "Redefined Struct Name.");
-				return false;
-			}
-			break;
-		case FUNCTION_TABLE:
-			if (check_existence(struct_symbol_table) == -1 && check_existence(variable_symbol_table) == -1) {
-				int nn = check_existence(function_symbol_table);
-				if (nn == -1)
-					add_entry(&function_symbol_table);
-				else {
-					int equal = check_type_equal(function_symbol_table.table[nn]->type, type);
-					if (exist == 0){
-						if (!equal){
-							semantic_error(19, lineno, "Inconsistent Declaration of Function.");
-							return false;
-						}
-					}
-					else {
-						if (function_symbol_table.existence[nn] == 0) {
-							if (equal)
-								function_symbol_table.existence[nn] = 1;
-							else{
-								semantic_error(19, lineno, "Inconsistent Declaration Function.");
-								return false;
-							}
+	table->table[table->top] = entry;
+	table->existence[table->top] = exist;
+	table->top = table->top + 1;
 
-						}
-						else{
-							semantic_error(4, lineno, "Redefined Function Name.");
-							return false;
-						}
-					}
-				}
-			}
-			else {
-				semantic_error(4, lineno, "Redefined Function Name.");
-				return false;
-			}
-			break;
-		case VARIABLE_TABLE:
-			if (check_existence(struct_symbol_table) == -1
-			 && check_existence(function_symbol_table) == -1
-			 && check_existence(variable_symbol_table) == -1)
-				add_entry(&variable_symbol_table);
-			else{
-				semantic_error(3, lineno, "Redefined Variable Name.");
-				return false;
-			}
-			break;
-	}
+	return table->top - 1;
+}
+
+bool add_function_symbol_entry(char* name, symbol_type *type, int lineno, int exist) {
+	symbol_table_entry *entry = (symbol_table_entry *)malloc(sizeof(symbol_table_entry));
+	
+	if(entry == NULL)
+		error("malloc error\n");
+
+	symbol_table *table = &function_symbol_table;
+	
+	strcpy(entry->name, name);
+	entry->lineno = lineno;
+	entry->type = type;
+	table->table[table->top] = entry;
+	table->existence[table->top] = exist;
+	table->top = table->top + 1;
+
+	return true;
+}
+
+bool add_struct_symbol_entry(char* name, symbol_type *type, int lineno, int exist) {
+	symbol_table_entry *entry = (symbol_table_entry *)malloc(sizeof(symbol_table_entry));
+	
+	if(entry == NULL)
+		error("malloc error\n");
+	
+	symbol_table *table = &struct_symbol_table;
+
+	strcpy(entry->name, name);
+	entry->lineno = lineno;
+	entry->type = type;
+	
+	table->table[table->top] = entry;
+	table->existence[table->top] = exist;
+	table->top = table->top + 1;
+
 	return true;
 }
 
@@ -158,37 +132,6 @@ symbol_type *get_type(Tree_Node *specifier) {
 		else if (strcmp(child->value, "float") == 0)
 			type->type = TYPE_FLOAT;
 		type->size = 4;
-	}
-	else if (strcmp(child->type, "StructSpecifier") == 0) {
-		child = child->child->sibling;
-		if (strcmp(child->type, "Tag") == 0) {
-			char *id = child->child->value;
-			int i = 0;
-			free(type);
-			type = NULL;
-			for (i = 0; i < struct_symbol_table.top; i++)
-				if (struct_symbol_table.existence[i] < 2 && strcmp(id, struct_symbol_table.table[i]->name) == 0){
-					type = struct_symbol_table.table[i]->type;
-					break;
-				}
-			if (type == NULL)
-				semantic_error(17, child->child->lineno, "Undefined Struct Name");
-		}
-		else {
-			creat_new_scope();
-			type->type = TYPE_STRUCT;
-			type->struct_field.table_length = 0;
-			type->struct_field.field_table = (symbol_table_entry *)malloc(sizeof(symbol_table_entry) * 20);
-			get_symbol_entries(type->struct_field.field_table, child->sibling->sibling, &(type->struct_field.table_length));
-			delete_local_scope();
-			
-			int i = 0;
-			symbol_table_entry *table = type->struct_field.field_table;
-			type->size = 0;
-			for (i = 0; i < type->struct_field.table_length; i++)
-				type->size = type->size + table[i].type->size;
-			add_symbol_entry(child->child->value, type, child->child->lineno, STRUCT_TABLE, 1);
-		}
 	}
 	return type;
 }
